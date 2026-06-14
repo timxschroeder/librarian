@@ -57,16 +57,30 @@ jobs:
 
       - run: npm ci
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
       - name: Apply database migrations
-        # supabase db push tracks which migrations have been applied and only
-        # runs new ones. All migrations are idempotent so the first run is safe
-        # even if they were previously applied via the dashboard SQL editor.
-        run: supabase db push --db-url "${{ secrets.SUPABASE_DB_URL }}"
+        # Uses the Supabase Management API (HTTPS) rather than a direct Postgres
+        # connection — the direct host resolves to IPv6 which GitHub Actions can't reach.
+        # All migrations are idempotent so re-running them is always safe.
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          PROJECT_REF=$(echo "$VITE_SUPABASE_URL" | grep -oP 'https://\K[^.]+')
+          echo "Applying migrations to project: $PROJECT_REF"
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "→ $(basename $f)"
+            response=$(jq -n --rawfile q "$f" '{query: $q}' | \
+              curl -sf \
+                -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+                -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d @-)
+            if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+              echo "Migration failed: $(echo "$response" | jq -r '.error')"
+              exit 1
+            fi
+            echo "  ✓ applied"
+          done
 
       - run: npm run build
         env:
