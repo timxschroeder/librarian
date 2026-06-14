@@ -33,3 +33,19 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
+
+      - name: Smoke test
+        run: |
+          url="https://timxschroeder.github.io/librarian/"
+          echo "Waiting for GitHub Pages to propagate..."
+          for i in $(seq 1 18); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+            echo "Attempt $i: HTTP $status"
+            if [ "$status" = "200" ]; then
+              echo "Site is up at $url"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "ERROR: $url did not return 200 after 3 minutes"
+          exit 1
