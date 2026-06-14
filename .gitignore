@@ -15,6 +15,14 @@ dist-ssr/
 .env.local
 .env.*.local
 
+# Claude Code — keep personal overrides local
+.claude/settings.local.json
+.claude/launch.json
+
+# Test artifacts
+test-results/
+playwright-report/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

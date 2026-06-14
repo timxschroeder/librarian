@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { updateProfile } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Settings() {
@@ -7,15 +7,23 @@ export default function Settings() {
   const [name, setName] = useState(profile?.name ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function saveName() {
     if (!user || !name.trim()) return
     setSaving(true)
-    await supabase.from('profiles').update({ name: name.trim() }).eq('id', user.id)
-    await refreshProfile()
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-    setSaving(false)
+    setError(null)
+    try {
+      await updateProfile(user.id, { name: name.trim() })
+      await refreshProfile()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      console.error('Failed to save name', err)
+      setError((err as { message?: string })?.message ?? 'Could not save. Try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -48,6 +56,7 @@ export default function Settings() {
               {saved ? '✓' : saving ? '...' : 'Save'}
             </button>
           </div>
+          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </div>
 
         <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">

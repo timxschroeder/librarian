@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { upsertBookAndUserBook } from '../lib/db'
 import { searchBooks, toBook } from '../lib/openLibrary'
 import { useAuth } from '../contexts/AuthContext'
 import type { OpenLibrarySearchResult } from '../types'
@@ -38,19 +38,7 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
     setAdding(result.key)
     setError(null)
     try {
-      const book = toBook(result)
-      const { error: bookErr } = await supabase.from('books').upsert(book, { onConflict: 'id' })
-      if (bookErr) throw bookErr
-      const { error: ubErr } = await supabase.from('user_books').upsert(
-        {
-          user_id: user.id,
-          book_id: book.id,
-          rating: rating || null,
-          read_at: new Date().toISOString().split('T')[0],
-        },
-        { onConflict: 'user_id,book_id' }
-      )
-      if (ubErr) throw ubErr
+      await upsertBookAndUserBook(user.id, toBook(result), rating)
       onAdded()
       onClose()
     } catch (err: unknown) {

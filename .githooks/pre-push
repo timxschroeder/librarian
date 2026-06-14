@@ -1,0 +1,14 @@
+#!/bin/sh
+# Quality gate before every push: typecheck + lint + unit/component tests.
+# Enable once per clone with:
+#   git config core.hooksPath .githooks
+#
+# npm is installed via Homebrew on this machine; prepend its bin so the hook works
+# from GUI git clients too. Harmless if /opt/homebrew/bin doesn't exist.
+export PATH="/opt/homebrew/bin:$PATH"
+
+echo "▶ pre-push: running npm run check…"
+if ! npm run check; then
+  echo "✗ pre-push checks failed — push aborted. Fix the above, or bypass with: git push --no-verify"
+  exit 1
+fi

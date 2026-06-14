@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { getUserBooks } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import BookCard from '../components/BookCard'
 import AddBookModal from '../components/AddBookModal'
@@ -9,17 +9,20 @@ export default function Shelf() {
   const { user, profile } = useAuth()
   const [userBooks, setUserBooks] = useState<UserBook[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
 
   const fetchBooks = useCallback(async () => {
     if (!user) return
-    const { data } = await supabase
-      .from('user_books')
-      .select('*, book:books(*), profile:profiles(id, name)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-    setUserBooks((data as UserBook[]) ?? [])
-    setLoading(false)
+    setError(null)
+    try {
+      setUserBooks(await getUserBooks(user.id))
+    } catch (err) {
+      console.error('Failed to load shelf', err)
+      setError('Could not load your shelf. Please refresh.')
+    } finally {
+      setLoading(false)
+    }
   }, [user])
 
   useEffect(() => {
@@ -51,6 +54,18 @@ export default function Shelf() {
           {[...Array(6)].map((_, i) => (
             <div key={i} className="aspect-[2/3] bg-parchment rounded-md animate-pulse" />
           ))}
+        </div>
+      ) : error ? (
+        <div className="text-center py-20">
+          <p className="text-5xl mb-4">⚠️</p>
+          <p className="font-display text-xl text-ink mb-2">Something went wrong</p>
+          <p className="text-muted text-sm mb-6">{error}</p>
+          <button
+            onClick={fetchBooks}
+            className="bg-forest-700 text-white px-5 py-2.5 rounded-full text-sm font-body font-medium hover:bg-forest-900 transition-colors"
+          >
+            Try again
+          </button>
         </div>
       ) : userBooks.length === 0 ? (
         <div className="text-center py-20">

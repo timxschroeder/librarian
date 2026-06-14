@@ -41,9 +41,9 @@ else → show <Layout> with shelf/discover/settings routes
 
 Provides `user`, `session`, `profile`, `loading`, `signOut`, `refreshProfile`. After onboarding saves, call `refreshProfile()` — it re-fetches the profile and the routing gate re-evaluates, navigating away from `<Onboarding />` automatically.
 
-### Supabase client
+### Data access (`src/lib/db.ts`)
 
-**Critical:** the Supabase JS client never throws — every call returns `{data, error}`. Always destructure and check the error explicitly, then throw if needed:
+**All Supabase table calls go through `src/lib/db.ts`. Components must NOT import `supabase` directly** (the auth methods in `AuthContext` are the only exception). This is where the `{data, error}` → throw contract lives, enforced once and unit-tested in `src/lib/db.test.ts`:
 
 ```typescript
 const { data, error } = await supabase.from('profiles').update({...}).eq('id', user.id).select('id')
@@ -51,7 +51,7 @@ if (error) throw error
 if (!data?.length) throw new Error('No rows updated')
 ```
 
-Swallowing errors produces infinite loading spinners with no user feedback. Don't do it.
+The Supabase JS client never throws — every call returns `{data, error}`. Swallowing the error produces silent failures / infinite spinners with no user feedback. To add a new DB operation: add a typed function to `db.ts`, cover it in `db.test.ts`, then call it from the component (which try/catches and surfaces the error in the UI).
 
 ## Design system
 
@@ -83,15 +83,23 @@ RLS is enabled on all tables. Key policies:
 
 Migrations live in `supabase/migrations/` and are applied on every deploy via the Supabase Management API. **All migration SQL must be idempotent** (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP … IF EXISTS` before recreating policies).
 
+**RLS policies require table GRANTs.** Policies are only evaluated *after* a role passes table-level privilege checks. Because we create tables via the Management API (not the dashboard), the `authenticated`/`anon` roles do **not** auto-receive GRANTs — a missing GRANT surfaces as `permission denied for table X` (Postgres 42501), distinct from an RLS denial (`new row violates row-level security policy`). `003_grants.sql` grants the required privileges; any new table needs a matching GRANT. The deploy's "Verify table grants" step asserts this against the real DB so a gap fails the deploy instead of shipping.
+
 ## Testing
 
-### Unit tests (Vitest)
+### Unit + component tests (Vitest)
 
 ```bash
-npm test
+npm test          # run once
+npm run check     # typecheck + lint + tests — run this before every push
 ```
 
-Pure-function tests in `src/**/*.test.ts`. Currently covers `src/lib/openLibrary.ts`.
+Runs in `happy-dom` with React Testing Library (`src/test/setup.ts`). Tests live in `src/**/*.test.{ts,tsx}`:
+- `src/lib/db.test.ts` — the data layer, using the chainable mock in `src/test/supabaseMock.ts` (mock the client, assert each function throws on error / returns data / builds the right payload). **This is the highest-value coverage — it catches the silent-failure bug class without a live DB.**
+- `src/pages/Onboarding.test.tsx`, `src/components/AddBookModal.test.tsx` — component flows; mock `../lib/db` and `../contexts/AuthContext`.
+- `src/lib/openLibrary.test.ts` — pure functions.
+
+When you touch DB logic or a component flow, add/extend a test here first — don't rely on the live app to find the bug.
 
 ### E2E tests (Playwright)
 
@@ -115,6 +123,18 @@ Required secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_ACCES
 
 ## Working in this repo
 
-**Verify before pushing.** For any change that touches DB reads/writes or a new user-facing flow: start the dev server locally (`npm run dev`), test the actual feature against real Supabase, confirm it works. Mocked E2E tests pass even when the real DB operations are broken — they are not a substitute for a manual check on DB-touching code.
+### Definition of Done (before every push)
+
+1. `PATH=/opt/homebrew/bin:$PATH npm run check` passes (typecheck + lint + tests).
+2. New/changed DB logic has a `db.test.ts` case; new/changed flows have a component test.
+3. **DB-touching changes also get one manual check against real Supabase** — start `npm run dev`, exercise the actual feature. Mocked unit/E2E tests pass even when real DB ops (RLS/grants/schema) are broken; they are not a substitute.
+
+A `pre-push` git hook runs `npm run check` automatically. Enable it once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Bypass in a pinch with `git push --no-verify`.
 
 Otherwise, move fast. This is a personal project — no approval process, no staging environment, push directly to `main`.

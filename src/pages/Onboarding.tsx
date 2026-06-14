@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import { completeOnboarding, type OnboardingBook } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { GENRES, CURATED_BOOKS, type CuratedBook } from '../data/onboardingBooks'
 
@@ -59,7 +59,8 @@ export default function Onboarding() {
   function toggleGenre(key: string) {
     setSelectedGenres(prev => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -67,7 +68,8 @@ export default function Onboarding() {
   function toggleBook(id: string) {
     setSelectedBooks(prev => {
       const next = new Map(prev)
-      next.has(id) ? next.delete(id) : next.set(id, 0)
+      if (next.has(id)) next.delete(id)
+      else next.set(id, 0)
       return next
     })
   }
@@ -90,44 +92,24 @@ export default function Onboarding() {
     setSaving(true)
     setSaveError(null)
     try {
-      const today = new Date().toISOString().split('T')[0]
-      const bookIds = [...selectedBooks.keys()]
-
-      if (bookIds.length > 0) {
-        const booksToInsert = bookIds.map(id => {
-          const b = CURATED_BOOKS.find(x => x.id === id)!
-          return {
+      const books: OnboardingBook[] = [...selectedBooks.keys()].map(id => {
+        const b = CURATED_BOOKS.find(x => x.id === id)!
+        return {
+          book: {
             id: b.id,
             title: b.title,
             author: b.author,
             cover_url: `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg`,
             isbn: b.isbn,
-            description: null as string | null,
-            first_publish_year: null as number | null,
-            subjects: null as string[] | null,
-          }
-        })
-        const { error: booksError } = await supabase.from('books').upsert(booksToInsert, { onConflict: 'id' })
-        if (booksError) throw booksError
+            description: null,
+            first_publish_year: null,
+            subjects: null,
+          },
+          rating: selectedBooks.get(id) || 0,
+        }
+      })
 
-        const userBooksToInsert = bookIds.map(id => ({
-          user_id: user.id,
-          book_id: id,
-          rating: selectedBooks.get(id) || null,
-          read_at: today,
-        }))
-        const { error: userBooksError } = await supabase.from('user_books').upsert(userBooksToInsert, { onConflict: 'user_id,book_id' })
-        if (userBooksError) throw userBooksError
-      }
-
-      const { data: updated, error: profileError } = await supabase
-        .from('profiles')
-        .update({ genres: [...selectedGenres], onboarded_at: new Date().toISOString() })
-        .eq('id', user.id)
-        .select('id')
-      if (profileError) throw profileError
-      if (!updated?.length) throw new Error('Profile not found — try signing out and back in.')
-
+      await completeOnboarding(user.id, [...selectedGenres], books)
       await refreshProfile()
     } catch (err) {
       console.error('Onboarding save failed', err)
