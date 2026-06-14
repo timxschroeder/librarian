@@ -121,6 +121,30 @@ jobs:
           fi
           echo "✓ table grants verified"
 
+      - name: Set Edge Function secrets
+        # Sets GOOGLE_API_KEY for the Edge Function. Skips gracefully if the GitHub
+        # secret isn't set yet (Supabase secrets persist across deploys, so a one-time
+        # manual `supabase secrets set` is also sufficient).
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          if [ -z "$GOOGLE_API_KEY" ]; then
+            echo "⚠ GOOGLE_API_KEY GitHub secret not set — skipping (relying on existing Supabase secret)."
+            exit 0
+          fi
+          PROJECT_REF=$(echo "$VITE_SUPABASE_URL" | grep -oP 'https://\K[^.]+')
+          npx supabase@latest secrets set GOOGLE_API_KEY="$GOOGLE_API_KEY" --project-ref "$PROJECT_REF"
+
+      - name: Deploy Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          PROJECT_REF=$(echo "$VITE_SUPABASE_URL" | grep -oP 'https://\K[^.]+')
+          npx supabase@latest functions deploy librarian --project-ref "$PROJECT_REF"
+
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

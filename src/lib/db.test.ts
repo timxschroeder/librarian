@@ -15,6 +15,8 @@ import {
   getUserBooks,
   upsertBookAndUserBook,
   completeOnboarding,
+  getChatHistory,
+  saveChatMessage,
   type OnboardingBook,
 } from './db'
 import type { Book } from '../types'
@@ -26,6 +28,7 @@ function setClient(opts: Parameters<typeof createSupabaseMock>[0]) {
 const book: Book = {
   id: 'isbn:1', title: 'T', author: 'A', cover_url: null,
   description: null, first_publish_year: null, subjects: null, isbn: '1',
+  average_rating: null, ratings_count: null,
 }
 
 beforeEach(() => {
@@ -94,6 +97,35 @@ describe('upsertBookAndUserBook', () => {
   it('throws when the user_books upsert fails', async () => {
     setClient({ tables: { user_books: { error: { message: 'ub fail' } } } })
     await expect(upsertBookAndUserBook('u1', book, 4)).rejects.toMatchObject({ message: 'ub fail' })
+  })
+})
+
+describe('getChatHistory', () => {
+  it('returns the messages on success', async () => {
+    setClient({ tables: { chat_messages: { data: [{ id: 'm1', role: 'user', content: 'hi' }] } } })
+    expect(await getChatHistory('u1')).toEqual([{ id: 'm1', role: 'user', content: 'hi' }])
+  })
+
+  it('returns [] when there are no rows', async () => {
+    setClient({ tables: { chat_messages: { data: null } } })
+    expect(await getChatHistory('u1')).toEqual([])
+  })
+
+  it('throws on a Supabase error', async () => {
+    setClient({ tables: { chat_messages: { error: { message: 'rls' } } } })
+    await expect(getChatHistory('u1')).rejects.toMatchObject({ message: 'rls' })
+  })
+})
+
+describe('saveChatMessage', () => {
+  it('resolves when the insert succeeds', async () => {
+    setClient({ tables: { chat_messages: { error: null } } })
+    await expect(saveChatMessage('u1', 'user', 'hi')).resolves.toBeUndefined()
+  })
+
+  it('throws on a Supabase error (no silent failure)', async () => {
+    setClient({ tables: { chat_messages: { error: { message: 'denied' } } } })
+    await expect(saveChatMessage('u1', 'assistant', 'yo')).rejects.toMatchObject({ message: 'denied' })
   })
 })
 

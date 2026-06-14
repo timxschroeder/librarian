@@ -19,12 +19,11 @@ beforeEach(() => {
   refreshProfile.mockReset()
 })
 
-// Walk step 1 (pick a genre) → step 2 (continue) → step 3 (finish).
-async function reachFinish(user: ReturnType<typeof userEvent.setup>) {
+// Step 1: pick a genre → Continue → reach "Get started" on step 2.
+async function reachGetStarted(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Literary Fiction/ }))
   await user.click(screen.getByRole('button', { name: 'Continue' }))
-  await user.click(screen.getByRole('button', { name: 'Continue' }))
-  return screen.getByRole('button', { name: /Go to my shelf/ })
+  return screen.getByRole('button', { name: /Get started/ })
 }
 
 describe('Onboarding', () => {
@@ -44,8 +43,8 @@ describe('Onboarding', () => {
     const user = userEvent.setup()
     render(<Onboarding />)
 
-    const finish = await reachFinish(user)
-    await user.click(finish)
+    const getStarted = await reachGetStarted(user)
+    await user.click(getStarted)
 
     expect(await screen.findByText(/permission denied for table books/)).toBeInTheDocument()
     expect(refreshProfile).not.toHaveBeenCalled()
@@ -56,7 +55,7 @@ describe('Onboarding', () => {
     const user = userEvent.setup()
     render(<Onboarding />)
 
-    await user.click(await reachFinish(user))
+    await user.click(await reachGetStarted(user))
 
     expect(completeOnboarding).toHaveBeenCalledWith('u1', ['literary'], expect.any(Array))
     expect(refreshProfile).toHaveBeenCalled()

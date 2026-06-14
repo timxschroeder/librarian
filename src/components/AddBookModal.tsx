@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { upsertBookAndUserBook } from '../lib/db'
 import { searchBooks, toBook } from '../lib/openLibrary'
+import { enrichBook } from '../lib/googleBooks'
 import { useAuth } from '../contexts/AuthContext'
 import type { OpenLibrarySearchResult } from '../types'
 
@@ -38,7 +39,8 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
     setAdding(result.key)
     setError(null)
     try {
-      await upsertBookAndUserBook(user.id, toBook(result), rating)
+      const enriched = await enrichBook(toBook(result))
+      await upsertBookAndUserBook(user.id, enriched, rating)
       onAdded()
       onClose()
     } catch (err: unknown) {

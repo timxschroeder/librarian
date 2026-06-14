@@ -17,6 +17,8 @@ export interface Book {
   first_publish_year: number | null
   subjects: string[] | null
   isbn: string | null
+  average_rating: number | null
+  ratings_count: number | null
 }
 
 export interface UserBook {
@@ -41,6 +43,14 @@ export interface Recommendation {
   feedback: string | null
   created_at: string
   book: Book
+}
+
+export interface ChatMessage {
+  id: string
+  user_id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
 }
 
 export interface OpenLibrarySearchResult {

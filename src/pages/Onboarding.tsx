@@ -3,7 +3,7 @@ import { completeOnboarding, type OnboardingBook } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { GENRES, CURATED_BOOKS, type CuratedBook } from '../data/onboardingBooks'
 
-const SPINE_COLORS = ['bg-forest-700', 'bg-burgundy-700', 'bg-amber-800', 'bg-teal-800', 'bg-slate-700', 'bg-purple-900']
+const SPINE_COLORS = ['bg-forest-700', 'bg-burgundy-700', 'bg-forest-900']
 
 function spineColor(title: string): string {
   let hash = 0
@@ -32,7 +32,7 @@ function BookCover({ book }: { book: CuratedBook }) {
 
 export default function Onboarding() {
   const { user, refreshProfile } = useAuth()
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [step, setStep] = useState<1 | 2>(1)
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set())
   const [selectedBooks, setSelectedBooks] = useState<Map<string, number>>(new Map())
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
@@ -74,14 +74,6 @@ export default function Onboarding() {
     })
   }
 
-  function setRating(id: string, n: number) {
-    setSelectedBooks(prev => {
-      const next = new Map(prev)
-      next.set(id, next.get(id) === n ? 0 : n)
-      return next
-    })
-  }
-
   function goToBooks() {
     setActiveFilter(null)
     setStep(2)
@@ -104,8 +96,10 @@ export default function Onboarding() {
             description: null,
             first_publish_year: null,
             subjects: null,
+            average_rating: null,
+            ratings_count: null,
           },
-          rating: selectedBooks.get(id) || 0,
+          rating: 5,
         }
       })
 
@@ -130,7 +124,7 @@ export default function Onboarding() {
           <span className="font-display text-lg text-ink">Librarian</span>
         </div>
         <div className="flex gap-1.5 items-center">
-          {[1, 2, 3].map(n => (
+          {[1, 2].map(n => (
             <div
               key={n}
               className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -188,8 +182,12 @@ export default function Onboarding() {
         {step === 2 && (
           <div className="pt-6">
             <div className="text-center mb-6">
-              <h1 className="font-display text-3xl text-ink mb-2">Which of these have you read?</h1>
-              <p className="text-muted text-sm">Tap to add — rate as you go</p>
+              <h1 className="font-display text-3xl text-ink mb-2">Pick books you've loved</h1>
+              <p className="text-muted text-sm">
+                {selectedBooks.size > 0
+                  ? `${selectedBooks.size} book${selectedBooks.size !== 1 ? 's' : ''} selected`
+                  : 'Tap a cover to add it'}
+              </p>
             </div>
 
             {/* Genre filter tabs */}
@@ -219,11 +217,10 @@ export default function Onboarding() {
               ))}
             </div>
 
-            {/* Book grid — smaller cards */}
+            {/* Book grid */}
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 mb-6">
               {visibleBooks.map(b => {
                 const sel = selectedBooks.has(b.id)
-                const rating = selectedBooks.get(b.id) ?? 0
                 return (
                   <div key={b.id} className="flex flex-col gap-1">
                     <button
@@ -245,85 +242,30 @@ export default function Onboarding() {
                     </button>
                     <p className="text-[10px] font-body font-medium text-ink leading-tight line-clamp-2 px-0.5">{b.title}</p>
                     <p className="text-[9px] text-muted leading-none px-0.5">{b.author}</p>
-                    {sel && (
-                      <div className="flex gap-px px-0.5 mt-0.5">
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <button
-                            key={n}
-                            onClick={() => setRating(b.id, n)}
-                            className={`text-[11px] leading-none transition-colors ${n <= rating ? 'text-amber-500' : 'text-border hover:text-amber-300'}`}
-                          >
-                            ★
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )
               })}
             </div>
 
             <div className="flex items-center justify-between">
-              <span className={`text-sm ${selectedBooks.size > 0 ? 'text-forest-700 font-medium' : 'text-muted'}`}>
-                {selectedBooks.size > 0
-                  ? `${selectedBooks.size} book${selectedBooks.size > 1 ? 's' : ''} added`
-                  : "Tap books you've read"}
-              </span>
-              <div className="flex items-center gap-4">
-                <button onClick={() => setStep(3)} className="text-sm text-muted hover:text-ink transition-colors">
-                  Skip
-                </button>
-                <button
-                  onClick={() => setStep(3)}
-                  className="px-6 py-2.5 rounded-full bg-forest-700 text-white text-sm font-body font-semibold hover:bg-forest-900 transition-colors"
-                >
-                  Continue
-                </button>
-              </div>
+              <button onClick={complete} className="text-sm text-muted hover:text-ink transition-colors" disabled={saving}>
+                Skip
+              </button>
+              <button
+                onClick={complete}
+                disabled={saving}
+                className="px-6 py-2.5 rounded-full bg-forest-700 text-white text-sm font-body font-semibold hover:bg-forest-900 transition-colors disabled:opacity-60 flex items-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving…
+                  </>
+                ) : 'Get started'}
+              </button>
             </div>
-          </div>
-        )}
-
-        {/* ── Step 3: Complete ── */}
-        {step === 3 && (
-          <div className="flex flex-col items-center text-center pt-14">
-            <div className="w-16 h-16 rounded-full bg-forest-700/10 flex items-center justify-center mb-6">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#2C5F2E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
-                <path d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-            </div>
-            <h1 className="font-display text-3xl text-ink mb-2">Your shelf is ready</h1>
-            <p className="text-muted text-sm mb-7">
-              {selectedBooks.size > 0
-                ? `${selectedBooks.size} book${selectedBooks.size > 1 ? 's' : ''} added · ${selectedGenres.size} genre${selectedGenres.size > 1 ? 's' : ''} selected`
-                : `${selectedGenres.size} genre${selectedGenres.size > 1 ? 's' : ''} selected`}
-            </p>
-
-            <div className="flex flex-wrap gap-2 justify-center mb-10">
-              {[...selectedGenres].map(key => {
-                const g = GENRES.find(x => x.key === key)!
-                return (
-                  <span key={key} className="flex items-center gap-1.5 px-3 py-1 bg-forest-700/10 text-forest-700 text-xs font-body rounded-full border border-forest-700/20">
-                    <span>{g.emoji}</span> {g.label}
-                  </span>
-                )
-              })}
-            </div>
-
-            <button
-              onClick={complete}
-              disabled={saving}
-              className="w-full max-w-xs py-3.5 rounded-full bg-forest-700 text-white text-sm font-body font-semibold hover:bg-forest-900 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Saving…
-                </>
-              ) : 'Go to my shelf'}
-            </button>
             {saveError && (
-              <p className="mt-3 text-sm text-red-600 text-center max-w-xs">{saveError}</p>
+              <p className="mt-3 text-sm text-red-600 text-center">{saveError}</p>
             )}
           </div>
         )}

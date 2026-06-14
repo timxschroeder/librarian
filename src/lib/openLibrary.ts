@@ -15,6 +15,18 @@ export async function searchBooks(query: string): Promise<OpenLibrarySearchResul
   return data.docs as OpenLibrarySearchResult[]
 }
 
+export async function searchBooksByAuthor(
+  authorName: string,
+  limit = 20,
+): Promise<OpenLibrarySearchResult[]> {
+  if (!authorName.trim()) return []
+  const url = `${BASE}/search.json?author=${encodeURIComponent(authorName)}&limit=${limit}&fields=key,title,author_name,cover_i,first_publish_year,subject,isbn`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Author search failed for "${authorName}"`)
+  const data = await res.json()
+  return (data.docs ?? []) as OpenLibrarySearchResult[]
+}
+
 export function toBook(result: OpenLibrarySearchResult): Book {
   const id = result.key.replace('/works/', '')
   return {
@@ -26,5 +38,7 @@ export function toBook(result: OpenLibrarySearchResult): Book {
     first_publish_year: result.first_publish_year ?? null,
     subjects: result.subject?.slice(0, 10) ?? null,
     isbn: result.isbn?.[0] ?? null,
+    average_rating: null,
+    ratings_count: null,
   }
 }

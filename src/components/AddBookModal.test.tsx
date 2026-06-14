@@ -13,7 +13,13 @@ vi.mock('../lib/openLibrary', () => ({
   toBook: (r: { key: string; title: string }) => ({
     id: r.key, title: r.title, author: null, cover_url: null,
     description: null, first_publish_year: null, subjects: null, isbn: null,
+    average_rating: null, ratings_count: null,
   }),
+}))
+
+// enrichBook is best-effort; in tests it passes the book through unchanged.
+vi.mock('../lib/googleBooks', () => ({
+  enrichBook: (book: unknown) => Promise.resolve(book),
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
