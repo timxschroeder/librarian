@@ -36,10 +36,12 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
   async function addBook(result: OpenLibrarySearchResult) {
     if (!user) return
     setAdding(result.key)
+    setError(null)
     try {
       const book = toBook(result)
-      await supabase.from('books').upsert(book, { onConflict: 'id' })
-      await supabase.from('user_books').upsert(
+      const { error: bookErr } = await supabase.from('books').upsert(book, { onConflict: 'id' })
+      if (bookErr) throw bookErr
+      const { error: ubErr } = await supabase.from('user_books').upsert(
         {
           user_id: user.id,
           book_id: book.id,
@@ -48,10 +50,11 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
         },
         { onConflict: 'user_id,book_id' }
       )
+      if (ubErr) throw ubErr
       onAdded()
       onClose()
-    } catch {
-      setError('Failed to add book. Try again.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add book. Try again.')
     } finally {
       setAdding(null)
     }
@@ -86,9 +89,11 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
             <button
               onClick={search}
               disabled={searching || !query.trim()}
-              className="bg-forest-700 text-white px-4 py-2 rounded-lg text-sm font-body font-medium disabled:opacity-40 hover:bg-forest-900 transition-colors"
+              className="bg-forest-700 text-white px-4 py-2 rounded-lg text-sm font-body font-medium disabled:opacity-40 hover:bg-forest-900 transition-colors flex items-center justify-center min-w-[72px]"
             >
-              {searching ? '...' : 'Search'}
+              {searching
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : 'Search'}
             </button>
           </div>
 
@@ -112,13 +117,18 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
         </div>
 
         <div className="overflow-y-auto flex-1">
-          {error && (
+          {searching && (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-forest-700 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {!searching && error && (
             <p className="text-muted text-sm text-center py-6">{error}</p>
           )}
-          {!error && results.length === 0 && !searching && (
+          {!searching && !error && results.length === 0 && (
             <p className="text-muted text-sm text-center py-8">Search for a book above</p>
           )}
-          {results.map((r) => (
+          {!searching && results.map((r) => (
             <button
               key={r.key}
               onClick={() => addBook(r)}

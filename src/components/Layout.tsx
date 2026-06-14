@@ -3,10 +3,12 @@ import NavBar from './NavBar'
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-cream">
-      <main className="max-w-lg mx-auto pb-24 min-h-screen">
-        {children}
-      </main>
       <NavBar />
+      <main className="md:ml-56 pb-20 md:pb-0 min-h-screen">
+        <div className="max-w-4xl mx-auto">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }
