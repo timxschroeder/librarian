@@ -98,6 +98,14 @@ export async function injectAuth(page: Page, opts: InjectAuthOptions = {}) {
     await route.fulfill({ contentType: 'application/json', body: '{}' })
   })
 
+  await page.route(url => url.href.includes('/rest/v1/chat_messages'), async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ contentType: 'application/json', body: '[]' })
+    } else {
+      await route.fulfill({ contentType: 'application/json', body: '{}' })
+    }
+  })
+
   // Catch-all for Supabase auth endpoints so token refresh never fails
   await page.route(url => url.href.includes('/auth/v1/'), async route => {
     await route.fulfill({ contentType: 'application/json', body: '{}' })

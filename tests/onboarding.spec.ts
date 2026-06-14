@@ -53,34 +53,32 @@ test.describe('Onboarding flow', () => {
     await page.getByText('Literary Fiction').click()
     await page.getByRole('button', { name: 'Continue' }).click()
 
-    await expect(page.getByText('Which of these have you read?')).toBeVisible()
+    await expect(page.getByText("Pick books you've loved")).toBeVisible()
     // "All" tab and the selected genre tab should appear
     await expect(page.getByRole('button', { name: 'All' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Literary Fiction' })).toBeVisible()
   })
 
-  test('step 2 — selecting a book reveals star rating', async ({ page }) => {
+  test('step 2 — selecting a book updates the count', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('What do you love to read?')).toBeVisible()
     await page.getByText('Sci-Fi & Fantasy').click()
     await page.getByRole('button', { name: 'Continue' }).click()
-    await expect(page.getByText('Which of these have you read?')).toBeVisible()
+    await expect(page.getByText("Pick books you've loved")).toBeVisible()
 
     // Tap the first book cover button (has "aspect-[2/3]" in its class)
     await page.locator('button[class*="aspect"]').first().click()
-    // Star buttons should now appear
-    await expect(page.locator('button').filter({ hasText: '★' }).first()).toBeVisible()
+    await expect(page.getByText('1 book selected')).toBeVisible()
   })
 
-  test('step 3 — completion screen shows selected genres', async ({ page }) => {
+  test('step 2 — Skip and Get started buttons appear', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('What do you love to read?')).toBeVisible()
     await page.getByText('Literary Fiction').click()
     await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByRole('button', { name: 'Skip' }).click()
 
-    await expect(page.getByText('Your shelf is ready')).toBeVisible()
-    await expect(page.getByText('Literary Fiction')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Go to my shelf' })).toBeVisible()
+    await expect(page.getByText("Pick books you've loved")).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Get started' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Skip' })).toBeVisible()
   })
 })

@@ -23,15 +23,24 @@ test.describe('Shelf (authenticated + onboarded)', () => {
     // Desktop sidebar links (NavLink renders as <a>)
     await expect(page.getByRole('link', { name: 'Shelf' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Discover' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Librarian' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
   })
 
-  test('Discover page shows coming-soon message', async ({ page }) => {
+  test('Discover shows the author-suggestions empty state', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'My Shelf' })).toBeVisible()
     await page.getByRole('link', { name: 'Discover' }).click()
     await expect(page.getByRole('heading', { name: 'Discover' })).toBeVisible()
-    await expect(page.getByText(/AI-powered recommendations are coming soon/i)).toBeVisible()
+    await expect(page.getByText(/Rate books 4 stars or higher/i)).toBeVisible()
+  })
+
+  test('Librarian page renders the chat with a welcome message', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'My Shelf' })).toBeVisible()
+    await page.getByRole('link', { name: 'Librarian' }).click()
+    await expect(page.getByRole('heading', { name: 'Your Librarian' })).toBeVisible()
+    await expect(page.getByText(/I'm your personal librarian/i)).toBeVisible()
   })
 })
 
