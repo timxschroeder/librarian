@@ -37,6 +37,7 @@ export default function Onboarding() {
   const [selectedBooks, setSelectedBooks] = useState<Map<string, number>>(new Map())
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const filteredGenres = useMemo(
     () => GENRES.filter(g => selectedGenres.has(g.key)),
@@ -87,6 +88,7 @@ export default function Onboarding() {
   async function complete() {
     if (!user) return
     setSaving(true)
+    setSaveError(null)
     try {
       const today = new Date().toISOString().split('T')[0]
       const bookIds = [...selectedBooks.keys()]
@@ -105,7 +107,8 @@ export default function Onboarding() {
             subjects: null as string[] | null,
           }
         })
-        await supabase.from('books').upsert(booksToInsert, { onConflict: 'id' })
+        const { error: booksError } = await supabase.from('books').upsert(booksToInsert, { onConflict: 'id' })
+        if (booksError) throw booksError
 
         const userBooksToInsert = bookIds.map(id => ({
           user_id: user.id,
@@ -113,17 +116,23 @@ export default function Onboarding() {
           rating: selectedBooks.get(id) || null,
           read_at: today,
         }))
-        await supabase.from('user_books').upsert(userBooksToInsert, { onConflict: 'user_id,book_id' })
+        const { error: userBooksError } = await supabase.from('user_books').upsert(userBooksToInsert, { onConflict: 'user_id,book_id' })
+        if (userBooksError) throw userBooksError
       }
 
-      await supabase
+      const { data: updated, error: profileError } = await supabase
         .from('profiles')
         .update({ genres: [...selectedGenres], onboarded_at: new Date().toISOString() })
         .eq('id', user.id)
+        .select('id')
+      if (profileError) throw profileError
+      if (!updated?.length) throw new Error('Profile not found — try signing out and back in.')
 
       await refreshProfile()
     } catch (err) {
       console.error('Onboarding save failed', err)
+      const msg = (err as { message?: string })?.message ?? 'Save failed — please try again.'
+      setSaveError(msg)
       setSaving(false)
     }
   }
@@ -331,6 +340,9 @@ export default function Onboarding() {
                 </>
               ) : 'Go to my shelf'}
             </button>
+            {saveError && (
+              <p className="mt-3 text-sm text-red-600 text-center max-w-xs">{saveError}</p>
+            )}
           </div>
         )}
 

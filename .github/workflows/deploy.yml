@@ -61,6 +61,9 @@ jobs:
         # Uses the Supabase Management API (HTTPS) rather than a direct Postgres
         # connection — the direct host resolves to IPv6 which GitHub Actions can't reach.
         # All migrations are idempotent so re-running them is always safe.
+        # Error detection: the API returns an array on success and an object on failure
+        # (e.g. {"message":"...", "code":"..."}) — checking type == "object" catches all
+        # error shapes regardless of which key the message is in.
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -75,8 +78,8 @@ jobs:
                 -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
                 -H "Content-Type: application/json" \
                 -d @-)
-            if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
-              echo "Migration failed: $(echo "$response" | jq -r '.error')"
+            if echo "$response" | jq -e 'type == "object"' > /dev/null 2>&1; then
+              echo "Migration failed: $(echo "$response" | jq -r '.message // .error // .')"
               exit 1
             fi
             echo "  ✓ applied"
