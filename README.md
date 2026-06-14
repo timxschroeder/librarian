@@ -28,11 +28,9 @@ In your Supabase dashboard:
 4. Set **"Site URL"** to your Vercel deployment URL (or `http://localhost:5173` for local dev)
 5. Under **"User signups"**, disable public signups so only invited users can join
 
-### 3. Add users (Tim & Michelle)
+### 3. Add users
 
-In **Authentication → Users**, click **"Invite user"** and send invites to:
-- `timxschroeder@gmail.com`
-- `Kroegermichelle@web.de`
+In **Authentication → Users**, click **"Invite user"** and send invites to both users.
 
 ### 4. Configure the frontend
 
