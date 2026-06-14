@@ -27,7 +27,7 @@ export default function Shelf() {
   }, [fetchBooks])
 
   return (
-    <div className="px-5 pt-8 pb-4">
+    <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4">
       <div className="flex items-end justify-between mb-6">
         <div>
           <h1 className="font-display text-3xl text-ink leading-tight">My Shelf</h1>
@@ -47,7 +47,7 @@ export default function Shelf() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="aspect-[2/3] bg-parchment rounded-md animate-pulse" />
           ))}
@@ -67,7 +67,7 @@ export default function Shelf() {
       ) : (
         <>
           <p className="text-xs text-muted mb-4">{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'} read</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
             {userBooks.map((ub) => (
               <BookCard key={ub.id} userBook={ub} />
             ))}

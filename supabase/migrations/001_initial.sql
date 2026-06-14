@@ -50,30 +50,46 @@ alter table public.user_books enable row level security;
 alter table public.recommendations enable row level security;
 
 -- Books: readable and writable by all authenticated users
+drop policy if exists "books_select" on public.books;
 create policy "books_select" on public.books
   for select to authenticated using (true);
+
+drop policy if exists "books_insert" on public.books;
 create policy "books_insert" on public.books
   for insert to authenticated with check (true);
+
+drop policy if exists "books_update" on public.books;
 create policy "books_update" on public.books
   for update to authenticated using (true);
 
 -- Profiles: readable by all authenticated users, writable by self
+drop policy if exists "profiles_select" on public.profiles;
 create policy "profiles_select" on public.profiles
   for select to authenticated using (true);
+
+drop policy if exists "profiles_insert" on public.profiles;
 create policy "profiles_insert" on public.profiles
   for insert to authenticated with check (auth.uid() = id);
+
+drop policy if exists "profiles_update" on public.profiles;
 create policy "profiles_update" on public.profiles
   for update to authenticated using (auth.uid() = id);
 
 -- User books: readable by all authenticated users (partners can see each other)
+drop policy if exists "user_books_select" on public.user_books;
 create policy "user_books_select" on public.user_books
   for select to authenticated using (true);
+
+drop policy if exists "user_books_write" on public.user_books;
 create policy "user_books_write" on public.user_books
   for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Recommendations: private to each user
+drop policy if exists "recommendations_select" on public.recommendations;
 create policy "recommendations_select" on public.recommendations
   for select to authenticated using (auth.uid() = user_id);
+
+drop policy if exists "recommendations_write" on public.recommendations;
 create policy "recommendations_write" on public.recommendations
   for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 

@@ -54,7 +54,10 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
       onAdded()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to add book. Try again.')
+      const msg = err instanceof Error
+        ? err.message
+        : (err as { message?: string })?.message ?? 'Failed to add book. Try again.'
+      setError(msg)
     } finally {
       setAdding(null)
     }

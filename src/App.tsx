@@ -3,12 +3,12 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Shelf from './pages/Shelf'
 import Discover from './pages/Discover'
-import Together from './pages/Together'
 import Settings from './pages/Settings'
+import Onboarding from './pages/Onboarding'
 import Layout from './components/Layout'
 
 function AppRoutes() {
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
 
   if (loading) {
     return (
@@ -19,6 +19,7 @@ function AppRoutes() {
   }
 
   if (!user) return <Login />
+  if (!profile?.onboarded_at) return <Onboarding />
 
   return (
     <Layout>
@@ -26,7 +27,6 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/shelf" replace />} />
         <Route path="/shelf" element={<Shelf />} />
         <Route path="/discover" element={<Discover />} />
-        <Route path="/together" element={<Together />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/shelf" replace />} />
       </Routes>

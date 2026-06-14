@@ -3,6 +3,8 @@ export interface Profile {
   name: string
   email: string
   taste_summary: string | null
+  genres: string[]
+  onboarded_at: string | null
   created_at: string
 }
 

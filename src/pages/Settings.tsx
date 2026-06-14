@@ -19,10 +19,10 @@ export default function Settings() {
   }
 
   return (
-    <div className="px-5 pt-8 pb-4">
+    <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4">
       <h1 className="font-display text-3xl text-ink mb-6">Settings</h1>
 
-      <div className="space-y-4">
+      <div className="space-y-4 md:max-w-xl">
         <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
           <h2 className="text-xs font-body font-semibold text-muted uppercase tracking-widest mb-4">Profile</h2>
           <div className="flex items-center gap-3 mb-4">
