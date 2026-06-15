@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { coverUrl, toBook, searchBooks, matchEntry, inAllowedLanguage, dedupeEditions } from './openLibrary'
+import { coverUrl, toBook, searchBooks, matchEntry, inAllowedLanguage, dedupeEditions, getWorkAuthorKeys, byAuthorIdentity } from './openLibrary'
 import type { OpenLibrarySearchResult, ParsedEntry } from '../types'
 
 describe('coverUrl', () => {
@@ -170,6 +170,63 @@ describe('dedupeEditions', () => {
     ])
     expect(out).toHaveLength(1)
     expect(out[0].key).toBe('/works/B')
+  })
+})
+
+describe('getWorkAuthorKeys', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('returns bare author keys from a work record', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        authors: [
+          { author: { key: '/authors/OL2976628A' } },
+          { author: { key: '/authors/OL7231336A' } },
+        ],
+      }),
+    } as Response)
+    expect(await getWorkAuthorKeys('OL17078706W')).toEqual(['OL2976628A', 'OL7231336A'])
+  })
+
+  it('returns empty for a blank work id without fetching', async () => {
+    expect(await getWorkAuthorKeys('  ')).toEqual([])
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('tolerates a work record with no authors', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({}) } as Response)
+    expect(await getWorkAuthorKeys('OL1W')).toEqual([])
+  })
+
+  it('throws on a non-ok response', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: false } as Response)
+    await expect(getWorkAuthorKeys('OL1W')).rejects.toThrow('Work lookup failed')
+  })
+})
+
+describe('byAuthorIdentity', () => {
+  const make = (key: string, author_key?: string[]): OpenLibrarySearchResult => ({
+    key, title: 'X', author_key,
+  })
+
+  it('keeps only works crediting an allowed author key', () => {
+    const out = byAuthorIdentity(
+      [
+        make('/works/A', ['OL2976628A', 'OL7231336A']), // the real Thiel
+        make('/works/B', ['OL999A']), // a different Peter Thiel
+        make('/works/C', undefined), // no author key
+      ],
+      new Set(['OL2976628A']),
+    )
+    expect(out.map((r) => r.key)).toEqual(['/works/A'])
+  })
+
+  it('keeps everything when identity is unknown (empty key set)', () => {
+    const results = [make('/works/A', ['OL999A']), make('/works/B', undefined)]
+    expect(byAuthorIdentity(results, new Set())).toEqual(results)
   })
 })
 

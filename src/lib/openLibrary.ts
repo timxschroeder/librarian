@@ -26,11 +26,40 @@ export async function searchBooksByAuthor(
   limit = 20,
 ): Promise<OpenLibrarySearchResult[]> {
   if (!authorName.trim()) return []
-  const url = `${BASE}/search.json?author=${encodeURIComponent(authorName)}&limit=${limit}&fields=key,title,author_name,cover_i,first_publish_year,subject,isbn,language,edition_count`
+  const url = `${BASE}/search.json?author=${encodeURIComponent(authorName)}&limit=${limit}&fields=key,title,author_name,author_key,cover_i,first_publish_year,subject,isbn,language,edition_count`
   const res = await fetch(url)
   if (!res.ok) throw new Error(`Author search failed for "${authorName}"`)
   const data = await res.json()
   return (data.docs ?? []) as OpenLibrarySearchResult[]
+}
+
+/**
+ * Resolve a work to its author Open Library identity keys (bare, e.g. "OL2976628A").
+ * Searching by author NAME conflates different people who share a name; the work the
+ * reader actually loved names its author unambiguously, so we filter Discover by this.
+ */
+export async function getWorkAuthorKeys(workId: string): Promise<string[]> {
+  if (!workId.trim()) return []
+  const res = await fetch(`${BASE}/works/${workId}.json`)
+  if (!res.ok) throw new Error(`Work lookup failed for "${workId}"`)
+  const data = await res.json()
+  const authors = (data.authors ?? []) as { author?: { key?: string } }[]
+  return authors
+    .map((a) => a.author?.key?.replace('/authors/', ''))
+    .filter((k): k is string => Boolean(k))
+}
+
+/**
+ * Keep only works crediting one of the given author identity keys. An empty key set
+ * means the loved work didn't resolve to an identity — fall back to keeping everything
+ * rather than blanking the feed.
+ */
+export function byAuthorIdentity(
+  results: OpenLibrarySearchResult[],
+  authorKeys: Set<string>,
+): OpenLibrarySearchResult[] {
+  if (authorKeys.size === 0) return results
+  return results.filter((r) => (r.author_key ?? []).some((k) => authorKeys.has(k)))
 }
 
 /**

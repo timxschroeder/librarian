@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getUserBooks, upsertBookAndUserBook } from '../lib/db'
-import { searchBooksByAuthor, toBook, inAllowedLanguage, dedupeEditions } from '../lib/openLibrary'
+import { searchBooksByAuthor, toBook, inAllowedLanguage, dedupeEditions, getWorkAuthorKeys, byAuthorIdentity } from '../lib/openLibrary'
 import { useAuth } from '../contexts/AuthContext'
 import type { Book, OpenLibrarySearchResult } from '../types'
 
@@ -47,33 +47,43 @@ export default function Discover() {
         userBooks.map((ub) => `${ub.book.title.toLowerCase()}::${(ub.book.author ?? '').toLowerCase()}`),
       )
 
-      // Loved authors: rated >= 4, deduplicated, author must be non-null
-      const lovedAuthors = Array.from(
-        new Set(
-          userBooks
-            .filter((ub) => ub.rating != null && ub.rating >= 4 && ub.book.author)
-            .map((ub) => ub.book.author as string),
-        ),
-      )
+      // Loved authors: rated >= 4, deduplicated, author must be non-null. Keep one
+      // representative loved book per author — its OL work resolves the author's
+      // identity, which disambiguates homonyms ("Peter Thiel" the eye doctor etc.).
+      const lovedBookByAuthor = new Map<string, string>()
+      for (const ub of userBooks) {
+        if (ub.rating != null && ub.rating >= 4 && ub.book.author && !lovedBookByAuthor.has(ub.book.author)) {
+          lovedBookByAuthor.set(ub.book.author, ub.book.id)
+        }
+      }
 
-      if (lovedAuthors.length === 0) {
+      if (lovedBookByAuthor.size === 0) {
         setGroups([])
         setLoading(false)
         return
       }
 
-      // Fetch OL results per author in parallel (cap to 5 loved authors to keep it fast)
-      const topAuthors = lovedAuthors.slice(0, 5)
-      const results = await Promise.all(
-        topAuthors.map((author) => searchBooksByAuthor(author, 20).catch(() => [] as OpenLibrarySearchResult[])),
-      )
+      // Fetch OL results + author identity per author in parallel (cap to 5 to keep it fast)
+      const topAuthors = Array.from(lovedBookByAuthor.keys()).slice(0, 5)
+      const [results, identities] = await Promise.all([
+        Promise.all(
+          topAuthors.map((author) => searchBooksByAuthor(author, 20).catch(() => [] as OpenLibrarySearchResult[])),
+        ),
+        Promise.all(
+          topAuthors.map((author) =>
+            getWorkAuthorKeys(lovedBookByAuthor.get(author) ?? '').catch(() => [] as string[]),
+          ),
+        ),
+      ])
 
       const newGroups: AuthorGroup[] = []
       for (let i = 0; i < topAuthors.length; i++) {
         const author = topAuthors[i]
-        // Drop foreign-language editions, then collapse the same book's many OL
-        // "works" to one, before filtering out what's already on the shelf.
-        const candidates = dedupeEditions(results[i].filter(inAllowedLanguage))
+        // Keep only works by the same author identity, drop foreign-language editions,
+        // then collapse the same book's many OL "works" to one, before filtering out
+        // what's already on the shelf.
+        const sameAuthor = byAuthorIdentity(results[i], new Set(identities[i]))
+        const candidates = dedupeEditions(sameAuthor.filter(inAllowedLanguage))
         const filtered = candidates.filter((r) => {
           const workId = r.key.replace('/works/', '')
           if (onShelf.has(workId)) return false

@@ -80,6 +80,8 @@ export interface OpenLibrarySearchResult {
   key: string
   title: string
   author_name?: string[]
+  /** Open Library author identity keys, e.g. ['OL2976628A']. Disambiguates homonyms. */
+  author_key?: string[]
   cover_i?: number
   first_publish_year?: number
   subject?: string[]
