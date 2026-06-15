@@ -59,19 +59,6 @@ export default function Settings() {
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </div>
 
-        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
-          <h2 className="text-xs font-body font-semibold text-muted uppercase tracking-widest mb-2">AI Recommendations</h2>
-          <p className="text-sm text-muted leading-relaxed mb-3">
-            Powered by Claude. The API key lives securely in Supabase — add it once and both of you can use it.
-          </p>
-          <div className="bg-parchment rounded-lg p-3 space-y-1">
-            <p className="text-xs font-body font-medium text-ink">To enable recommendations:</p>
-            <p className="text-xs text-muted">1. Open your Supabase project dashboard</p>
-            <p className="text-xs text-muted">2. Go to Edge Functions → Secrets</p>
-            <p className="text-xs text-muted">3. Add <code className="bg-white/70 px-1 rounded font-mono">ANTHROPIC_API_KEY</code></p>
-          </div>
-        </div>
-
         <button
           onClick={signOut}
           className="w-full py-3.5 rounded-2xl border border-border text-sm font-body font-medium text-burgundy-700 hover:bg-burgundy-100/40 transition-colors"
