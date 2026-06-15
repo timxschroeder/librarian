@@ -26,11 +26,60 @@ export async function searchBooksByAuthor(
   limit = 20,
 ): Promise<OpenLibrarySearchResult[]> {
   if (!authorName.trim()) return []
-  const url = `${BASE}/search.json?author=${encodeURIComponent(authorName)}&limit=${limit}&fields=key,title,author_name,cover_i,first_publish_year,subject,isbn`
+  const url = `${BASE}/search.json?author=${encodeURIComponent(authorName)}&limit=${limit}&fields=key,title,author_name,cover_i,first_publish_year,subject,isbn,language,edition_count`
   const res = await fetch(url)
   if (!res.ok) throw new Error(`Author search failed for "${authorName}"`)
   const data = await res.json()
   return (data.docs ?? []) as OpenLibrarySearchResult[]
+}
+
+/**
+ * MARC language codes we surface on Discover. This is a private two-reader app —
+ * English and German — so foreign-language editions are noise, not discovery.
+ */
+const ALLOWED_LANGUAGES = new Set(['eng', 'ger'])
+
+/**
+ * Keep only works that have an English or German edition. Works with no language
+ * data at all are kept — Open Library is patchy, and dropping a legitimate hit just
+ * because the field is missing is worse than the occasional foreign straggler.
+ */
+export function inAllowedLanguage(result: OpenLibrarySearchResult): boolean {
+  if (!result.language || result.language.length === 0) return true
+  return result.language.some((code) => ALLOWED_LANGUAGES.has(code))
+}
+
+/** Collapse a title to its comparable core: lowercase, drop subtitle + punctuation. */
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .split(/[:–—]| - /)[0] // drop subtitle after a colon or spaced dash
+    .replace(/[^a-z0-9 ]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Higher = the edition readers more likely mean: most-published, then has a cover. */
+function editionScore(r: OpenLibrarySearchResult): number {
+  return (r.edition_count ?? 0) * 10 + (r.cover_i ? 1 : 0)
+}
+
+/**
+ * Open Library returns the same book as several "works" — reissues, regional
+ * editions, translations, the odd study guide. Collapse results that share a
+ * normalized title + author down to the single most-published one, preserving
+ * the original ordering of the kept results.
+ */
+export function dedupeEditions(results: OpenLibrarySearchResult[]): OpenLibrarySearchResult[] {
+  const keyFor = (r: OpenLibrarySearchResult) =>
+    `${normalizeTitle(r.title)}::${(r.author_name?.[0] ?? '').toLowerCase()}`
+  const best = new Map<string, OpenLibrarySearchResult>()
+  for (const r of results) {
+    const key = keyFor(r)
+    const current = best.get(key)
+    if (!current || editionScore(r) > editionScore(current)) best.set(key, r)
+  }
+  return results.filter((r) => best.get(keyFor(r)) === r)
 }
 
 /**

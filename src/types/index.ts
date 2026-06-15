@@ -84,6 +84,10 @@ export interface OpenLibrarySearchResult {
   first_publish_year?: number
   subject?: string[]
   isbn?: string[]
+  /** MARC language codes the work has editions in, e.g. ['eng', 'ger']. */
+  language?: string[]
+  /** Number of editions Open Library has — a rough popularity/canonical signal. */
+  edition_count?: number
 }
 
 /**

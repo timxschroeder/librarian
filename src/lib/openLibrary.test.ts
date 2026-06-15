@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { coverUrl, toBook, searchBooks, matchEntry } from './openLibrary'
+import { coverUrl, toBook, searchBooks, matchEntry, inAllowedLanguage, dedupeEditions } from './openLibrary'
 import type { OpenLibrarySearchResult, ParsedEntry } from '../types'
 
 describe('coverUrl', () => {
@@ -100,6 +100,75 @@ describe('searchBooks', () => {
   it('throws on non-ok response', async () => {
     vi.mocked(fetch).mockResolvedValue({ ok: false } as Response)
     await expect(searchBooks('gatsby')).rejects.toThrow('Search failed')
+  })
+})
+
+describe('inAllowedLanguage', () => {
+  const r = (language?: string[]): OpenLibrarySearchResult => ({
+    key: '/works/OL1W', title: 'X', language,
+  })
+
+  it('keeps English and German works', () => {
+    expect(inAllowedLanguage(r(['eng']))).toBe(true)
+    expect(inAllowedLanguage(r(['ger']))).toBe(true)
+    expect(inAllowedLanguage(r(['fre', 'eng']))).toBe(true)
+  })
+
+  it('drops works available only in other languages', () => {
+    expect(inAllowedLanguage(r(['fre']))).toBe(false)
+    expect(inAllowedLanguage(r(['spa', 'ita']))).toBe(false)
+  })
+
+  it('keeps works with no language data rather than dropping a legit hit', () => {
+    expect(inAllowedLanguage(r(undefined))).toBe(true)
+    expect(inAllowedLanguage(r([]))).toBe(true)
+  })
+})
+
+describe('dedupeEditions', () => {
+  const make = (
+    key: string,
+    title: string,
+    opts: Partial<OpenLibrarySearchResult> = {},
+  ): OpenLibrarySearchResult => ({
+    key, title, author_name: ['Clayton Christensen'], ...opts,
+  })
+
+  it('collapses subtitle/punctuation variants of the same book', () => {
+    const out = dedupeEditions([
+      make('/works/A', 'How Will You Measure Your Life?', { edition_count: 30 }),
+      make('/works/B', 'How Will You Measure Your Life'),
+      make('/works/C', 'How Will You Measure Your Life: ...', { edition_count: 5 }),
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].key).toBe('/works/A') // highest edition_count wins
+  })
+
+  it('keeps distinct books by the same author', () => {
+    const out = dedupeEditions([
+      make('/works/A', 'The Innovators Dilemma'),
+      make('/works/B', 'How Will You Measure Your Life'),
+    ])
+    expect(out).toHaveLength(2)
+  })
+
+  it('preserves the original order of the kept results', () => {
+    const out = dedupeEditions([
+      make('/works/A', 'Book One'),
+      make('/works/B', 'Book Two'),
+      make('/works/C', 'Book One', { edition_count: 99 }),
+    ])
+    expect(out.map((r) => r.title)).toEqual(['Book Two', 'Book One'])
+    expect(out.find((r) => r.title === 'Book One')?.key).toBe('/works/C')
+  })
+
+  it('breaks ties toward the edition that has a cover', () => {
+    const out = dedupeEditions([
+      make('/works/A', 'Same Title'),
+      make('/works/B', 'Same Title', { cover_i: 123 }),
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].key).toBe('/works/B')
   })
 })
 

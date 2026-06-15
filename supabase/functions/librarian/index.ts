@@ -226,7 +226,13 @@ async function gemini(
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents,
-      generationConfig: { temperature, maxOutputTokens },
+      // gemini-2.5-flash is a thinking model and thinking tokens are drawn from the
+      // SAME maxOutputTokens budget as the reply. Left on, a long internal trace
+      // eats the budget and the visible answer is truncated mid-sentence — which is
+      // exactly what made the 2–3 sentence taste portrait look cut off. None of our
+      // prompts need step-by-step reasoning, so disable thinking: full budget for
+      // the actual output, and faster responses across the board.
+      generationConfig: { temperature, maxOutputTokens, thinkingConfig: { thinkingBudget: 0 } },
     }),
   })
   if (!res.ok) {
