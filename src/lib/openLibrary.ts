@@ -40,12 +40,15 @@ export async function searchBooksByAuthor(
 const ALLOWED_LANGUAGES = new Set(['eng', 'ger'])
 
 /**
- * Keep only works that have an English or German edition. Works with no language
- * data at all are kept — Open Library is patchy, and dropping a legitimate hit just
- * because the field is missing is worse than the occasional foreign straggler.
+ * Keep only works explicitly tagged with an English or German edition. Foreign
+ * translations on Open Library (the Italian/Spanish/Turkish editions of a book)
+ * routinely come back with NO language data, so an "allow when unknown" rule lets
+ * exactly the noise we want to drop slip through. The canonical English/German
+ * works we actually want are well-catalogued and carry the tag — so requiring it
+ * costs us little and keeps the feed clean.
  */
 export function inAllowedLanguage(result: OpenLibrarySearchResult): boolean {
-  if (!result.language || result.language.length === 0) return true
+  if (!result.language || result.language.length === 0) return false
   return result.language.some((code) => ALLOWED_LANGUAGES.has(code))
 }
 

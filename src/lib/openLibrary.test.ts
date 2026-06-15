@@ -119,9 +119,10 @@ describe('inAllowedLanguage', () => {
     expect(inAllowedLanguage(r(['spa', 'ita']))).toBe(false)
   })
 
-  it('keeps works with no language data rather than dropping a legit hit', () => {
-    expect(inAllowedLanguage(r(undefined))).toBe(true)
-    expect(inAllowedLanguage(r([]))).toBe(true)
+  it('drops works with no language data — that is how foreign translations leak in', () => {
+    // Open Library returns the Italian/Spanish editions of a book with language: null.
+    expect(inAllowedLanguage(r(undefined))).toBe(false)
+    expect(inAllowedLanguage(r([]))).toBe(false)
   })
 })
 
