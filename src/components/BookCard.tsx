@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import type { UserBook } from '../types'
 
 interface Props {
   userBook: UserBook
-  compact?: boolean
+  onRate?: (userBookId: string, rating: number | null) => void
 }
 
 const SPINE_COLORS = [
@@ -22,8 +23,17 @@ function spineColor(title: string): string {
   return SPINE_COLORS[hash % SPINE_COLORS.length]
 }
 
-export default function BookCard({ userBook }: Props) {
+export default function BookCard({ userBook, onRate }: Props) {
   const { book, rating } = userBook
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  function handleStarClick(n: number) {
+    if (!onRate) return
+    // clicking the current rating clears it
+    onRate(userBook.id, n === rating ? null : n)
+  }
+
+  const displayRating = hovered ?? rating
 
   return (
     <div className="flex flex-col gap-2 group">
@@ -48,12 +58,31 @@ export default function BookCard({ userBook }: Props) {
         {book.author && (
           <p className="text-muted text-xs mt-0.5 line-clamp-1">{book.author}</p>
         )}
-        {rating != null && (
-          <div className="flex gap-0.5 mt-1">
+        {onRate ? (
+          <div className="flex gap-0.5 mt-1" onMouseLeave={() => setHovered(null)}>
             {[1, 2, 3, 4, 5].map((n) => (
-              <span key={n} className={`text-xs ${n <= rating ? 'text-amber-500' : 'text-border'}`}>★</span>
+              <button
+                key={n}
+                type="button"
+                aria-label={`Rate ${n} star${n !== 1 ? 's' : ''}`}
+                onClick={() => handleStarClick(n)}
+                onMouseEnter={() => setHovered(n)}
+                className={`text-xs leading-none transition-colors ${
+                  displayRating != null && n <= displayRating ? 'text-amber-500' : 'text-border'
+                } hover:text-amber-400 cursor-pointer`}
+              >
+                ★
+              </button>
             ))}
           </div>
+        ) : (
+          rating != null && (
+            <div className="flex gap-0.5 mt-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <span key={n} className={`text-xs ${n <= rating ? 'text-amber-500' : 'text-border'}`}>★</span>
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>

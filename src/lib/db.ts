@@ -56,6 +56,14 @@ export async function upsertBookAndUserBook(
   if (ubErr) throw ubErr
 }
 
+export async function updateUserBookRating(userBookId: string, rating: number | null): Promise<void> {
+  const { error } = await supabase
+    .from('user_books')
+    .update({ rating })
+    .eq('id', userBookId)
+  if (error) throw error
+}
+
 export async function getChatHistory(userId: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from('chat_messages')

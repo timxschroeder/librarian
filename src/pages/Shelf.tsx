@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getUserBooks } from '../lib/db'
+import { getUserBooks, updateUserBookRating } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import BookCard from '../components/BookCard'
 import AddBookModal from '../components/AddBookModal'
@@ -28,6 +28,18 @@ export default function Shelf() {
   useEffect(() => {
     fetchBooks()
   }, [fetchBooks])
+
+  async function handleRate(userBookId: string, rating: number | null) {
+    setUserBooks((prev) =>
+      prev.map((ub) => (ub.id === userBookId ? { ...ub, rating } : ub)),
+    )
+    try {
+      await updateUserBookRating(userBookId, rating)
+    } catch (err) {
+      console.error('Failed to update rating', err)
+      fetchBooks()
+    }
+  }
 
   return (
     <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4">
@@ -84,7 +96,7 @@ export default function Shelf() {
           <p className="text-xs text-muted mb-4">{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'} read</p>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
             {userBooks.map((ub) => (
-              <BookCard key={ub.id} userBook={ub} />
+              <BookCard key={ub.id} userBook={ub} onRate={handleRate} />
             ))}
           </div>
         </>
