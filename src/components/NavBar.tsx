@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import Bertha from './Bertha'
 
 const BookIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
@@ -45,10 +46,8 @@ export default function NavBar() {
     <>
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 w-56 bg-white border-r border-border z-40">
-        <div className="flex items-center gap-2.5 px-5 py-6 border-b border-border">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#2C5F2E" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
-            <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0118 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-          </svg>
+        <div className="flex items-center gap-2 px-5 py-5 border-b border-border">
+          <Bertha expression="happy" size={30} className="flex-shrink-0" />
           <span className="font-display text-xl text-ink">Librarian</span>
         </div>
         <nav className="flex-1 p-3 flex flex-col gap-0.5">

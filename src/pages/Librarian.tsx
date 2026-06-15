@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getChatHistory, saveChatMessage, updateProfile, getUserBooks } from '../lib/db'
 import { chat, recommend, initializeTastePortrait, type RecommendationSlate } from '../lib/librarian'
+import Bertha from '../components/Bertha'
 
 interface LocalMessage {
   id: string
@@ -114,7 +115,7 @@ export default function Librarian() {
       const errMsg: LocalMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: 'Sorry, something went wrong. Please try again.',
+        content: 'Hm. That didn\'t land — try me again?',
       }
       setMessages((prev) => [...prev, errMsg])
       console.error(err)
@@ -153,7 +154,7 @@ export default function Librarian() {
       const errMsg: LocalMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: 'Sorry, I had trouble generating recommendations. Please try again.',
+        content: 'Hm, the recommendations got away from me. Give me another try?',
       }
       setMessages((prev) => [...prev, errMsg])
       console.error(err)
@@ -192,7 +193,7 @@ export default function Librarian() {
         <h1 className="font-display text-3xl text-ink">Your Librarian</h1>
         {initializing && (
           <p className="text-xs text-muted mt-1 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 bg-forest-700 rounded-full animate-pulse inline-block" />
+            <Bertha expression="thinking" size={22} />
             Getting to know your taste…
           </p>
         )}
@@ -201,7 +202,10 @@ export default function Librarian() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 md:px-8 py-6 space-y-4">
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {msg.role === 'assistant' && (
+              <Bertha expression={msg.slate ? 'delighted' : 'happy'} size={32} className="flex-shrink-0 mt-0.5" />
+            )}
             <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-last' : ''}`}>
               {/* Message bubble */}
               <div
@@ -240,7 +244,8 @@ export default function Librarian() {
 
         {/* Typing indicator */}
         {loading && (
-          <div className="flex justify-start">
+          <div className="flex gap-2.5 justify-start items-center">
+            <Bertha expression="thinking" size={32} className="flex-shrink-0" />
             <div className="bg-parchment px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
               {[0, 1, 2].map((i) => (
                 <span

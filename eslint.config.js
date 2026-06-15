@@ -5,7 +5,9 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'coverage', 'test-results', 'playwright-report'] },
+  // `.claude/worktrees/*` holds nested git worktrees (full repo copies with their own
+  // tsconfigs); linting into them confuses TS-ESLint's root detection. Never lint them.
+  { ignores: ['dist', 'node_modules', 'coverage', 'test-results', 'playwright-report', '.claude'] },
 
   // Application source (browser).
   {

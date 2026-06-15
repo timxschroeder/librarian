@@ -18,6 +18,7 @@ dist-ssr/
 # Claude Code — keep personal overrides local
 .claude/settings.local.json
 .claude/launch.json
+.claude/worktrees/
 
 # Test artifacts
 test-results/

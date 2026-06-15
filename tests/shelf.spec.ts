@@ -32,7 +32,7 @@ test.describe('Shelf (authenticated + onboarded)', () => {
     await expect(page.getByRole('heading', { name: 'My Shelf' })).toBeVisible()
     await page.getByRole('link', { name: 'Discover' }).click()
     await expect(page.getByRole('heading', { name: 'Discover' })).toBeVisible()
-    await expect(page.getByText(/Rate books 4 stars or higher/i)).toBeVisible()
+    await expect(page.getByText(/four stars or higher/i)).toBeVisible()
   })
 
   test('Librarian page renders the chat with a welcome message', async ({ page }) => {

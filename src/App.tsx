@@ -8,13 +8,15 @@ import Taste from './pages/Taste'
 import Settings from './pages/Settings'
 import Onboarding from './pages/Onboarding'
 import Layout from './components/Layout'
+import Bertha from './components/Bertha'
 
 function AppRoutes() {
   const { user, profile, loading } = useAuth()
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
+      <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-4">
+        <Bertha expression="reading" size={88} className="animate-pulse" />
         <p className="font-display text-2xl text-muted">Librarian</p>
       </div>
     )

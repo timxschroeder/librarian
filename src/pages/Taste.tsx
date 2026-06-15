@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserBooks } from '../lib/db'
 import { recomputeTasteProfile } from '../lib/librarian'
+import Bertha from '../components/Bertha'
 import type { TasteAxes, TasteAxis, UserBook } from '../types'
 
 // Below this confidence an axis is shown as an unknown "gap" rather than a position.
@@ -145,7 +146,7 @@ export default function Taste() {
   if (error) {
     return (
       <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <p className="text-5xl mb-4">⚠️</p>
+        <Bertha expression="oops" size={84} className="mb-3" />
         <p className="font-display text-xl text-ink mb-2">Something went wrong</p>
         <p className="text-muted text-sm mb-6">{error}</p>
         <button
@@ -162,9 +163,10 @@ export default function Taste() {
   if (bookCount === 0) {
     return (
       <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4 flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <Bertha expression="reading" size={96} className="mb-4" />
         <h1 className="font-display text-3xl text-ink mb-2">Your taste</h1>
         <p className="text-muted text-sm leading-relaxed max-w-xs">
-          Your librarian is still reading you in. Add and rate a few books on your shelf and your taste will take shape here.
+          I'm still reading you in. Add and rate a few books on your shelf and your taste will take shape here.
         </p>
       </div>
     )
@@ -175,8 +177,8 @@ export default function Taste() {
     return (
       <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4">
         <h1 className="font-display text-3xl text-ink mb-1">Your taste</h1>
-        <p className="text-muted text-sm mb-8 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 bg-forest-700 rounded-full animate-pulse inline-block" />
+        <p className="text-muted text-sm mb-8 flex items-center gap-2">
+          <Bertha expression="thinking" size={28} />
           Reading your shelf…
         </p>
         <div className="space-y-4">

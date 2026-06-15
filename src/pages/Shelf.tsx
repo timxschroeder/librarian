@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import BookCard from '../components/BookCard'
 import AddBookModal from '../components/AddBookModal'
 import BulkImportModal, { type ImportResult } from '../components/BulkImportModal'
+import Bertha from '../components/Bertha'
 import type { UserBook } from '../types'
 
 export default function Shelf() {
@@ -106,7 +107,9 @@ export default function Shelf() {
         </div>
       ) : error ? (
         <div className="text-center py-20">
-          <p className="text-5xl mb-4">⚠️</p>
+          <div className="flex justify-center mb-3">
+            <Bertha expression="oops" size={84} />
+          </div>
           <p className="font-display text-xl text-ink mb-2">Something went wrong</p>
           <p className="text-muted text-sm mb-6">{error}</p>
           <button
@@ -118,9 +121,11 @@ export default function Shelf() {
         </div>
       ) : userBooks.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-5xl mb-4">📚</p>
+          <div className="flex justify-center mb-3">
+            <Bertha expression="happy" size={96} />
+          </div>
           <p className="font-display text-xl text-ink mb-2">Your shelf is empty</p>
-          <p className="text-muted text-sm mb-6">Start adding books you've read.</p>
+          <p className="text-muted text-sm mb-6">Add a book you loved and I'll start to know your taste.</p>
           <button
             onClick={() => setShowAdd(true)}
             className="bg-forest-700 text-white px-5 py-2.5 rounded-full text-sm font-body font-medium hover:bg-forest-900 transition-colors"
@@ -132,10 +137,7 @@ export default function Shelf() {
         <>
           {batch ? (
             <div className="mb-5 rounded-xl border border-forest-700/20 bg-forest-700/5 p-4 flex items-start gap-3">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-forest-700 flex-shrink-0 mt-0.5">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <path d="M22 4 12 14.01l-3-3" />
-              </svg>
+              <Bertha expression="delighted" size={36} className="flex-shrink-0 -mt-1" />
               <div className="flex-1 text-sm">
                 <p className="text-ink">
                   <span className="font-medium">

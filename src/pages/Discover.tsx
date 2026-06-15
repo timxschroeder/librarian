@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getUserBooks, upsertBookAndUserBook } from '../lib/db'
 import { searchBooksByAuthor, toBook, inAllowedLanguage, dedupeEditions, getWorkAuthorKeys, byAuthorIdentity } from '../lib/openLibrary'
 import { useAuth } from '../contexts/AuthContext'
+import Bertha from '../components/Bertha'
 import type { Book, OpenLibrarySearchResult } from '../types'
 
 interface AuthorGroup {
@@ -153,7 +154,7 @@ export default function Discover() {
   if (error) {
     return (
       <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <p className="text-5xl mb-4">⚠️</p>
+        <Bertha expression="oops" size={84} className="mb-3" />
         <p className="font-display text-xl text-ink mb-2">Something went wrong</p>
         <p className="text-muted text-sm mb-6">{error}</p>
         <button
@@ -169,14 +170,10 @@ export default function Discover() {
   if (groups.length === 0) {
     return (
       <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <div className="w-16 h-16 rounded-full bg-forest-700/10 flex items-center justify-center mb-5">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#2C5F2E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
-            <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-          </svg>
-        </div>
+        <Bertha expression="reading" size={96} className="mb-4" />
         <h1 className="font-display text-3xl text-ink mb-2">Discover</h1>
         <p className="text-muted text-sm leading-relaxed max-w-xs">
-          Rate books 4 stars or higher on your shelf and we'll suggest more from those authors.
+          Rate a few books four stars or higher on your shelf and I'll pull more from those authors.
         </p>
       </div>
     )

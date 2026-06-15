@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { updateProfile } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
+import Bertha from '../components/Bertha'
 
 export default function Settings() {
   const { user, profile, signOut, refreshProfile } = useAuth()
@@ -66,7 +67,10 @@ export default function Settings() {
           Sign out
         </button>
 
-        <p className="text-center text-xs text-muted/60 pt-2">Librarian · Just for us</p>
+        <div className="flex flex-col items-center gap-1.5 pt-4 text-muted/60">
+          <Bertha expression="happy" size={40} />
+          <p className="text-center text-xs">Librarian · Just for us</p>
+        </div>
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { parseReadingList } from '../lib/librarian'
 import { matchEntry } from '../lib/openLibrary'
 import { bulkAddBooks } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
+import Bertha from './Bertha'
 import type { UserBook } from '../types'
 
 /** What the import hands back to the shelf to drive the "just added" review banner. */
@@ -78,23 +79,32 @@ export default function BulkImportModal({ onClose, onImported }: Props) {
         </div>
 
         <div className="p-5 overflow-y-auto flex-1">
-          <p className="text-sm text-muted mb-3">
-            Paste anything — a list, your reading notes, or a half-remembered paragraph.
-            We'll figure out the titles. Wrong guesses are easy to remove after.
-          </p>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={working}
-            placeholder={'The Left Hand of Darkness\nthat new Sally Rooney one\nall of the Wayfarers books by Becky Chambers\nProject Hail Mary'}
-            className="w-full h-44 resize-none border border-border rounded-lg px-3 py-2.5 text-sm font-body text-ink placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-forest-700 disabled:opacity-60"
-            autoFocus
-          />
-          {error && <p className="text-burgundy-700 text-sm mt-3">{error}</p>}
+          {working ? (
+            <div className="flex flex-col items-center justify-center text-center py-10">
+              <Bertha expression="thinking" size={96} className="mb-4" />
+              <p className="font-display text-lg text-ink">{status || 'Reading your list…'}</p>
+              <p className="text-sm text-muted mt-1">Matching each line to a real book.</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted mb-3">
+                Paste anything — a list, your reading notes, or a half-remembered paragraph.
+                I'll figure out the titles. Wrong guesses are easy to remove after.
+              </p>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={'The Left Hand of Darkness\nthat new Sally Rooney one\nall of the Wayfarers books by Becky Chambers\nProject Hail Mary'}
+                className="w-full h-44 resize-none border border-border rounded-lg px-3 py-2.5 text-sm font-body text-ink placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-forest-700 disabled:opacity-60"
+                autoFocus
+              />
+              {error && <p className="text-burgundy-700 text-sm mt-3">{error}</p>}
+            </>
+          )}
         </div>
 
         <div className="p-4 border-t border-border flex items-center justify-between flex-shrink-0">
-          <span className="text-xs text-muted">{working ? status : 'Gemini resolves each line to a real book'}</span>
+          <span className="text-xs text-muted">{working ? 'Working…' : 'Gemini resolves each line to a real book'}</span>
           <button
             onClick={run}
             disabled={working || !text.trim()}

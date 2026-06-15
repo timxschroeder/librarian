@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { completeOnboarding, type OnboardingBook } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { GENRES, CURATED_BOOKS, type CuratedBook } from '../data/onboardingBooks'
+import Bertha from '../components/Bertha'
 
 const SPINE_COLORS = ['bg-forest-700', 'bg-burgundy-700', 'bg-forest-900']
 
@@ -118,9 +119,7 @@ export default function Onboarding() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-6 pb-2 max-w-2xl mx-auto">
         <div className="flex items-center gap-2">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#2C5F2E" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
-            <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0118 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-          </svg>
+          <Bertha expression="happy" size={26} className="flex-shrink-0" />
           <span className="font-display text-lg text-ink">Librarian</span>
         </div>
         <div className="flex gap-1.5 items-center">
@@ -141,8 +140,11 @@ export default function Onboarding() {
         {step === 1 && (
           <div className="pt-8">
             <div className="text-center mb-8">
+              <div className="flex justify-center mb-3">
+                <Bertha expression="happy" size={76} />
+              </div>
               <h1 className="font-display text-3xl text-ink mb-2">What do you love to read?</h1>
-              <p className="text-muted text-sm">Pick your genres — these shape your recommendations</p>
+              <p className="text-muted text-sm">Pick your genres — I'll use them to shape what I suggest</p>
             </div>
 
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-6">
