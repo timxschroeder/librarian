@@ -84,6 +84,17 @@ serve(async (req) => {
       return json({ taste_axes: axes })
     }
 
+    // ── Parse a pasted reading list into candidate books ────────────────────
+    if (mode === 'parse') {
+      const text = String(body.text ?? '').slice(0, 4000)
+      if (!text.trim()) return json({ entries: [] })
+      const prompt = `${name} pasted a rough list of books they've read — it may be a clean list, reading notes, or half-remembered references. Extract each distinct book as a candidate.\n\nPASTED TEXT:\n${text}\n\nRespond with ONLY this JSON — no prose before or after:\n{"entries":[{"title":"","author":"","confidence":0.0,"source_line":"","series_expanded":false}]}\n\nRules:\n- One entry per distinct book. Resolve vague references ("that new Sally Rooney one") to a real title + author.\n- author: the best-known author's full name, or "" if genuinely unknown.\n- confidence 0..1: your certainty the title+author is correct and unambiguous. Vague or guessed references get LOW confidence.\n- source_line: the exact fragment of the pasted text this entry came from.\n- series_expanded: true ONLY when you inferred the book from a series/author instruction ("all of the Wayfarers books") rather than it being named directly. When expanding a series, include AT MOST 6 books and set series_expanded:true on each.\n- Do not invent books to pad the list, and skip lines that clearly aren't books.`
+      const raw = await gemini(system, [{ role: 'user', parts: [{ text: prompt }] }], 0.2, 2048)
+      const match = raw.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('Malformed parse response from model')
+      return json(JSON.parse(match[0]))
+    }
+
     // ── Recommendation slate ────────────────────────────────────────────────
     if (mode === 'recommend') {
       const moodLine = message.trim() ? `The reader says: "${message}"\n\n` : ''
@@ -202,7 +213,12 @@ function normalizeAxes(rawAxes: unknown, totalCount: number, signature: string) 
   }
 }
 
-async function gemini(systemPrompt: string, contents: object[], temperature = 0.8): Promise<string> {
+async function gemini(
+  systemPrompt: string,
+  contents: object[],
+  temperature = 0.8,
+  maxOutputTokens = 1024,
+): Promise<string> {
   const key = Deno.env.get('GOOGLE_API_KEY')
   const res = await fetch(`${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${key}`, {
     method: 'POST',
@@ -210,7 +226,7 @@ async function gemini(systemPrompt: string, contents: object[], temperature = 0.
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents,
-      generationConfig: { temperature, maxOutputTokens: 1024 },
+      generationConfig: { temperature, maxOutputTokens },
     }),
   })
   if (!res.ok) {

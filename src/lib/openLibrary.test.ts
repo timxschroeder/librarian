@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { coverUrl, toBook, searchBooks } from './openLibrary'
-import type { OpenLibrarySearchResult } from '../types'
+import { coverUrl, toBook, searchBooks, matchEntry } from './openLibrary'
+import type { OpenLibrarySearchResult, ParsedEntry } from '../types'
 
 describe('coverUrl', () => {
   it('builds M-size cover URL', () => {
@@ -100,5 +100,46 @@ describe('searchBooks', () => {
   it('throws on non-ok response', async () => {
     vi.mocked(fetch).mockResolvedValue({ ok: false } as Response)
     await expect(searchBooks('gatsby')).rejects.toThrow('Search failed')
+  })
+})
+
+describe('matchEntry', () => {
+  const entry: ParsedEntry = {
+    title: 'Dune', author: 'Frank Herbert', confidence: 0.9,
+    source_line: 'Dune', series_expanded: false,
+  }
+
+  function mockDocs(docs: unknown[]) {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ docs }),
+    } as Response))
+  }
+
+  it('returns the top hit unflagged for a confident entry', async () => {
+    mockDocs([{ key: '/works/OL1W', title: 'Dune', author_name: ['Frank Herbert'] }])
+    const m = await matchEntry(entry)
+    expect(m.book?.title).toBe('Dune')
+    expect(m.flagged).toBe(false)
+  })
+
+  it('flags a low-confidence match but still keeps the book', async () => {
+    mockDocs([{ key: '/works/OL1W', title: 'Maybe Dune' }])
+    const m = await matchEntry({ ...entry, confidence: 0.3 })
+    expect(m.book).not.toBeNull()
+    expect(m.flagged).toBe(true)
+  })
+
+  it('flags a series-expanded entry even at high confidence', async () => {
+    mockDocs([{ key: '/works/OL1W', title: 'A Closed and Common Orbit' }])
+    const m = await matchEntry({ ...entry, series_expanded: true })
+    expect(m.flagged).toBe(true)
+  })
+
+  it('returns a null book and flags when nothing matches', async () => {
+    mockDocs([])
+    const m = await matchEntry(entry)
+    expect(m.book).toBeNull()
+    expect(m.flagged).toBe(true)
+    expect(m.sourceLine).toBe('Dune')
   })
 })

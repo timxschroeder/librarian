@@ -14,6 +14,8 @@ import {
   updateProfile,
   getUserBooks,
   upsertBookAndUserBook,
+  bulkAddBooks,
+  deleteUserBook,
   completeOnboarding,
   getChatHistory,
   saveChatMessage,
@@ -97,6 +99,70 @@ describe('upsertBookAndUserBook', () => {
   it('throws when the user_books upsert fails', async () => {
     setClient({ tables: { user_books: { error: { message: 'ub fail' } } } })
     await expect(upsertBookAndUserBook('u1', book, 4)).rejects.toMatchObject({ message: 'ub fail' })
+  })
+})
+
+describe('bulkAddBooks', () => {
+  const b2: Book = { ...book, id: 'isbn:2', title: 'T2' }
+
+  it('returns nothing and makes no calls for an empty list', async () => {
+    setClient({ default: { error: { message: 'should not be called' } } })
+    await expect(bulkAddBooks('u1', [])).resolves.toEqual({ added: [], skipped: 0 })
+  })
+
+  it('inserts new books and returns the added rows', async () => {
+    setClient({
+      tables: {
+        // 1st user_books call = existing lookup (none); 2nd = the insert+select
+        user_books: [{ data: [] }, { data: [{ id: 'ub1', book_id: 'isbn:1' }] }],
+        books: { error: null },
+      },
+    })
+    const res = await bulkAddBooks('u1', [book])
+    expect(res.skipped).toBe(0)
+    expect(res.added).toEqual([{ id: 'ub1', book_id: 'isbn:1' }])
+  })
+
+  it('skips books already on the shelf and reports the count', async () => {
+    setClient({ tables: { user_books: { data: [{ book_id: 'isbn:1' }] } } })
+    const res = await bulkAddBooks('u1', [book])
+    expect(res).toEqual({ added: [], skipped: 1 })
+  })
+
+  it('de-dupes repeats within the same batch', async () => {
+    setClient({
+      tables: {
+        user_books: [{ data: [] }, { data: [{ id: 'ub1', book_id: 'isbn:1' }] }],
+        books: { error: null },
+      },
+    })
+    const res = await bulkAddBooks('u1', [book, book, b2])
+    // 3 in, but `book` is duplicated → 1 skipped
+    expect(res.skipped).toBe(1)
+  })
+
+  it('throws when the books upsert is denied (grant/RLS bug)', async () => {
+    setClient({
+      tables: {
+        user_books: { data: [] },
+        books: { error: { message: 'permission denied for table books' } },
+      },
+    })
+    await expect(bulkAddBooks('u1', [book])).rejects.toMatchObject({
+      message: 'permission denied for table books',
+    })
+  })
+})
+
+describe('deleteUserBook', () => {
+  it('resolves when the delete succeeds', async () => {
+    setClient({ tables: { user_books: { error: null } } })
+    await expect(deleteUserBook('ub1')).resolves.toBeUndefined()
+  })
+
+  it('throws on a Supabase error', async () => {
+    setClient({ tables: { user_books: { error: { message: 'denied' } } } })
+    await expect(deleteUserBook('ub1')).rejects.toMatchObject({ message: 'denied' })
   })
 })
 

@@ -85,3 +85,24 @@ export interface OpenLibrarySearchResult {
   subject?: string[]
   isbn?: string[]
 }
+
+/**
+ * A candidate book extracted from a pasted reading list by the librarian `parse` step.
+ * `source_line` is the original fragment it came from (shown when a match looks wrong);
+ * `series_expanded` marks books inferred from a series/author instruction rather than
+ * named directly — always treated as low-confidence. See docs/bulk-import.md.
+ */
+export interface ParsedEntry {
+  title: string
+  author: string
+  confidence: number
+  source_line: string
+  series_expanded: boolean
+}
+
+/** A parsed entry after resolution against Open Library. `book === null` means no match. */
+export interface MatchedEntry {
+  book: Book | null
+  flagged: boolean
+  sourceLine: string
+}

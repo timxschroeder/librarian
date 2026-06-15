@@ -4,6 +4,10 @@ import type { UserBook } from '../types'
 interface Props {
   userBook: UserBook
   onRate?: (userBookId: string, rating: number | null) => void
+  /** Mark a freshly-imported best-guess match for review (amber flag). */
+  flagged?: boolean
+  /** When set, show a quick remove control — used during "just added" import review. */
+  onRemove?: (userBookId: string) => void
 }
 
 const SPINE_COLORS = [
@@ -23,7 +27,7 @@ function spineColor(title: string): string {
   return SPINE_COLORS[hash % SPINE_COLORS.length]
 }
 
-export default function BookCard({ userBook, onRate }: Props) {
+export default function BookCard({ userBook, onRate, flagged, onRemove }: Props) {
   const { book, rating } = userBook
   const [hovered, setHovered] = useState<number | null>(null)
 
@@ -51,6 +55,30 @@ export default function BookCard({ userBook, onRate }: Props) {
               {book.title}
             </span>
           </div>
+        )}
+        {flagged && (
+          <span
+            className="absolute top-1 left-1 flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-800 shadow-sm"
+            title="Best guess — check this one is right"
+            aria-label="Best guess — check this match"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+              <line x1="4" y1="22" x2="4" y2="15" />
+            </svg>
+          </span>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(userBook.id)}
+            aria-label={`Remove ${book.title}`}
+            className="absolute top-1 right-1 flex items-center justify-center w-5 h-5 rounded-full bg-white/90 text-burgundy-700 shadow-sm hover:bg-white transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+              <path d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         )}
       </div>
       <div>

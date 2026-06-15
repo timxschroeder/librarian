@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getUserBooks, updateUserBookRating } from '../lib/db'
+import { getUserBooks, updateUserBookRating, deleteUserBook } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import BookCard from '../components/BookCard'
 import AddBookModal from '../components/AddBookModal'
+import BulkImportModal, { type ImportResult } from '../components/BulkImportModal'
 import type { UserBook } from '../types'
 
 export default function Shelf() {
@@ -11,6 +12,9 @@ export default function Shelf() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  // The transient "just added" review batch — ephemeral client state, not persisted.
+  const [batch, setBatch] = useState<ImportResult | null>(null)
 
   const fetchBooks = useCallback(async () => {
     if (!user) return
@@ -41,6 +45,28 @@ export default function Shelf() {
     }
   }
 
+  async function handleRemove(userBookId: string) {
+    const prev = userBooks
+    setUserBooks((p) => p.filter((ub) => ub.id !== userBookId))
+    try {
+      await deleteUserBook(userBookId)
+    } catch (err) {
+      console.error('Failed to remove book', err)
+      setUserBooks(prev)
+    }
+  }
+
+  function handleImported(result: ImportResult) {
+    setBatch(result)
+    fetchBooks()
+  }
+
+  const batchUbIds = new Set(batch?.added.map((a) => a.id))
+  const flaggedBookIds = new Set(batch?.flaggedBookIds)
+  const flaggedCount = batch
+    ? batch.added.filter((a) => flaggedBookIds.has(a.book_id)).length
+    : 0
+
   return (
     <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4">
       <div className="flex items-end justify-between mb-6">
@@ -50,15 +76,26 @@ export default function Shelf() {
             <p className="text-muted text-sm mt-0.5">{profile.name}</p>
           )}
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 bg-forest-700 text-white px-4 py-2 rounded-full text-sm font-body font-medium hover:bg-forest-900 transition-colors"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-            <path d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-1.5 border border-forest-700 text-forest-700 px-4 py-2 rounded-full text-sm font-body font-medium hover:bg-forest-700/5 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <path d="M9 17V5h11M4 9h11v12H4z" />
+            </svg>
+            Import a list
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 bg-forest-700 text-white px-4 py-2 rounded-full text-sm font-body font-medium hover:bg-forest-900 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <path d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -93,17 +130,59 @@ export default function Shelf() {
         </div>
       ) : (
         <>
-          <p className="text-xs text-muted mb-4">{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'} read</p>
+          {batch ? (
+            <div className="mb-5 rounded-xl border border-forest-700/20 bg-forest-700/5 p-4 flex items-start gap-3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-forest-700 flex-shrink-0 mt-0.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <path d="M22 4 12 14.01l-3-3" />
+              </svg>
+              <div className="flex-1 text-sm">
+                <p className="text-ink">
+                  <span className="font-medium">
+                    Added {batch.added.length} {batch.added.length === 1 ? 'book' : 'books'} to your shelf.
+                  </span>
+                  {batch.skipped > 0 && ` ${batch.skipped} already there, skipped.`}
+                </p>
+                {(flaggedCount > 0 || batch.unmatched.length > 0) && (
+                  <p className="text-muted mt-1">
+                    {flaggedCount > 0 &&
+                      `${flaggedCount} ${flaggedCount === 1 ? 'was a' : 'were'} best ${flaggedCount === 1 ? 'guess' : 'guesses'} — flagged below; tap ✕ to remove. `}
+                    {batch.unmatched.length > 0 && `Couldn't find: ${batch.unmatched.join(', ')}.`}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setBatch(null)}
+                className="text-forest-700 text-sm font-medium hover:text-forest-900 transition-colors flex-shrink-0"
+              >
+                Done
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted mb-4">{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'} read</p>
+          )}
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-            {userBooks.map((ub) => (
-              <BookCard key={ub.id} userBook={ub} onRate={handleRate} />
-            ))}
+            {userBooks.map((ub) => {
+              const inBatch = batch != null && batchUbIds.has(ub.id)
+              return (
+                <BookCard
+                  key={ub.id}
+                  userBook={ub}
+                  onRate={handleRate}
+                  flagged={inBatch && flaggedBookIds.has(ub.book_id)}
+                  onRemove={inBatch ? handleRemove : undefined}
+                />
+              )
+            })}
           </div>
         </>
       )}
 
       {showAdd && (
         <AddBookModal onClose={() => setShowAdd(false)} onAdded={fetchBooks} />
+      )}
+      {showImport && (
+        <BulkImportModal onClose={() => setShowImport(false)} onImported={handleImported} />
       )}
     </div>
   )

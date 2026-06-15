@@ -1,6 +1,12 @@
-import type { Book, OpenLibrarySearchResult } from '../types'
+import type { Book, MatchedEntry, OpenLibrarySearchResult, ParsedEntry } from '../types'
 
 const BASE = 'https://openlibrary.org'
+
+/**
+ * Below this parse-confidence a match is flagged for review rather than trusted.
+ * One knob — tune against real pastes. See docs/bulk-import.md.
+ */
+export const MATCH_CONFIDENCE_THRESHOLD = 0.6
 
 export function coverUrl(coverId: number, size: 'S' | 'M' | 'L' = 'M'): string {
   return `https://covers.openlibrary.org/b/id/${coverId}-${size}.jpg`
@@ -25,6 +31,23 @@ export async function searchBooksByAuthor(
   if (!res.ok) throw new Error(`Author search failed for "${authorName}"`)
   const data = await res.json()
   return (data.docs ?? []) as OpenLibrarySearchResult[]
+}
+
+/**
+ * Resolve one parsed entry to a real book via Open Library, taking the top hit.
+ * Flags the match (for review) when the parse was uncertain, the entry came from a
+ * series expansion, or no book was found at all. Deliberately skips `enrichBook` —
+ * bulk import trades the extra Google Books call for speed; covers from OL are enough.
+ */
+export async function matchEntry(entry: ParsedEntry): Promise<MatchedEntry> {
+  const query = [entry.title, entry.author].filter(Boolean).join(' ').trim()
+  const results = query ? await searchBooks(query) : []
+  const top = results[0]
+  if (!top) {
+    return { book: null, flagged: true, sourceLine: entry.source_line }
+  }
+  const flagged = entry.series_expanded || entry.confidence < MATCH_CONFIDENCE_THRESHOLD
+  return { book: toBook(top), flagged, sourceLine: entry.source_line }
 }
 
 export function toBook(result: OpenLibrarySearchResult): Book {

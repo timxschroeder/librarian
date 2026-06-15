@@ -25,13 +25,23 @@ function builder(result: QueryResult) {
  * Provide a per-table result map; tables not listed resolve to `{data:null,error:null}`.
  *
  *   const supabase = createSupabaseMock({ tables: { books: { error: { message: 'denied' } } } })
+ *
+ * A table may also map to an *array* of results, returned one per call in order — for
+ * functions that hit the same table twice (e.g. read-then-insert in `bulkAddBooks`).
  */
 export function createSupabaseMock(
-  opts: { tables?: Record<string, QueryResult>; default?: QueryResult } = {}
+  opts: { tables?: Record<string, QueryResult | QueryResult[]>; default?: QueryResult } = {}
 ) {
-  const from = vi.fn((table: string) =>
-    builder(opts.tables?.[table] ?? opts.default ?? { data: null, error: null })
-  )
+  const counts: Record<string, number> = {}
+  const from = vi.fn((table: string) => {
+    const cfg = opts.tables?.[table] ?? opts.default ?? { data: null, error: null }
+    if (Array.isArray(cfg)) {
+      const i = counts[table] ?? 0
+      counts[table] = i + 1
+      return builder(cfg[Math.min(i, cfg.length - 1)])
+    }
+    return builder(cfg)
+  })
   return {
     from,
     auth: {

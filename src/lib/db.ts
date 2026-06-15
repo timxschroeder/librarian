@@ -64,6 +64,53 @@ export async function updateUserBookRating(userBookId: string, rating: number | 
   if (error) throw error
 }
 
+/**
+ * Add many books to a user's shelf in one shot (bulk import). Skips books already on
+ * the shelf and de-dupes within the batch, so re-pasting is safe. Returns the freshly
+ * inserted `user_books` rows (joined like `getUserBooks`, so the shelf can show them
+ * immediately) plus how many were skipped — for the "just added" review banner.
+ * See docs/bulk-import.md.
+ */
+export async function bulkAddBooks(
+  userId: string,
+  books: Book[],
+): Promise<{ added: UserBook[]; skipped: number }> {
+  if (books.length === 0) return { added: [], skipped: 0 }
+
+  const { data: existing, error: exErr } = await supabase
+    .from('user_books')
+    .select('book_id')
+    .eq('user_id', userId)
+    .in('book_id', books.map((b) => b.id))
+  if (exErr) throw exErr
+  const have = new Set((existing as { book_id: string }[] ?? []).map((r) => r.book_id))
+
+  const seen = new Set<string>()
+  const fresh = books.filter((b) => {
+    if (have.has(b.id) || seen.has(b.id)) return false
+    seen.add(b.id)
+    return true
+  })
+  const skipped = books.length - fresh.length
+  if (fresh.length === 0) return { added: [], skipped }
+
+  const { error: bookErr } = await supabase.from('books').upsert(fresh, { onConflict: 'id' })
+  if (bookErr) throw bookErr
+
+  const { data: inserted, error: ubErr } = await supabase
+    .from('user_books')
+    .insert(fresh.map((b) => ({ user_id: userId, book_id: b.id, read_at: today() })))
+    .select('*, book:books(*), profile:profiles(id, name)')
+  if (ubErr) throw ubErr
+
+  return { added: (inserted as UserBook[]) ?? [], skipped }
+}
+
+export async function deleteUserBook(userBookId: string): Promise<void> {
+  const { error } = await supabase.from('user_books').delete().eq('id', userBookId)
+  if (error) throw error
+}
+
 export async function getChatHistory(userId: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from('chat_messages')

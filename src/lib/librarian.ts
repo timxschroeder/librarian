@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { TasteAxes } from '../types'
+import type { ParsedEntry, TasteAxes } from '../types'
 
 export interface RecommendationSlate {
   title: string
@@ -40,6 +40,19 @@ export async function recomputeTasteProfile(): Promise<TasteAxes> {
   })
   if (error) throw error
   return (data as { taste_axes: TasteAxes }).taste_axes
+}
+
+/**
+ * Parse a freeform pasted reading list into candidate books. The edge function runs
+ * Gemini over the raw text and resolves half-remembered references to real titles.
+ * See docs/bulk-import.md.
+ */
+export async function parseReadingList(text: string): Promise<ParsedEntry[]> {
+  const { data, error } = await supabase.functions.invoke('librarian', {
+    body: { mode: 'parse', text },
+  })
+  if (error) throw error
+  return (data as { entries: ParsedEntry[] }).entries ?? []
 }
 
 export async function recommend(
