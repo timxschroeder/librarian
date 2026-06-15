@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { TasteAxes } from '../types'
 
 export interface RecommendationSlate {
   title: string
@@ -26,6 +27,19 @@ export async function chat(
   })
   if (error) throw error
   return data as { message: string; taste_summary_update: string | null }
+}
+
+/**
+ * Recompute the structured 5-axis taste profile. The edge function reads the
+ * user's shelf + portrait, projects them onto the axes, and persists `taste_axes`
+ * server-side; it also returns the fresh axes so the caller can update the UI.
+ */
+export async function recomputeTasteProfile(): Promise<TasteAxes> {
+  const { data, error } = await supabase.functions.invoke('librarian', {
+    body: { mode: 'profile' },
+  })
+  if (error) throw error
+  return (data as { taste_axes: TasteAxes }).taste_axes
 }
 
 export async function recommend(

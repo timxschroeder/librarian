@@ -6,7 +6,7 @@ vi.mock('./supabase', () => ({
   supabase: { functions: { invoke: (...args: unknown[]) => invoke(...args) } },
 }))
 
-import { initializeTastePortrait, chat, recommend } from './librarian'
+import { initializeTastePortrait, chat, recommend, recomputeTasteProfile } from './librarian'
 
 beforeEach(() => {
   invoke.mockReset()
@@ -61,5 +61,27 @@ describe('recommend', () => {
   it('throws on error', async () => {
     invoke.mockResolvedValue({ data: null, error: { message: 'nope' } })
     await expect(recommend('x', [])).rejects.toMatchObject({ message: 'nope' })
+  })
+})
+
+describe('recomputeTasteProfile', () => {
+  it('returns the taste axes and invokes the profile mode', async () => {
+    const axes = {
+      source_of_reward: { language: 0.4, story: 0.1, character: 0.2, ideas: 0.3 },
+      weight: { value: 0.5, confidence: 0.8 },
+      propulsion: { value: -0.3, confidence: 0.6 },
+      darkness: { value: 0.2, confidence: 0.7 },
+      tone: { value: 0, confidence: 0 },
+      signature: '3:13',
+      updated_at: '2026-06-15T00:00:00.000Z',
+    }
+    invoke.mockResolvedValue({ data: { taste_axes: axes }, error: null })
+    expect(await recomputeTasteProfile()).toEqual(axes)
+    expect(invoke).toHaveBeenCalledWith('librarian', { body: { mode: 'profile' } })
+  })
+
+  it('throws on an Edge Function error', async () => {
+    invoke.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    await expect(recomputeTasteProfile()).rejects.toMatchObject({ message: 'boom' })
   })
 })

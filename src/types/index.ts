@@ -1,8 +1,31 @@
+/** A single bipolar taste axis: a position from -1..1 and the librarian's confidence 0..1. */
+export interface TasteAxis {
+  value: number
+  confidence: number
+}
+
+/**
+ * The legible layer of the taste model — a projection the librarian writes from the
+ * shelf + chat. `source_of_reward` is a composition (the four shares sum to 1); the
+ * other four are bipolar axes. `signature` encodes the shelf state it was computed
+ * from (book count + ratings sum) so the client can tell when it's stale.
+ */
+export interface TasteAxes {
+  source_of_reward: { language: number; story: number; character: number; ideas: number }
+  weight: TasteAxis // -1 effortless .. +1 demanding
+  propulsion: TasteAxis // -1 slow burn .. +1 page-turner
+  darkness: TasteAxis // -1 warm .. +1 bleak
+  tone: TasteAxis // -1 earnest .. +1 playful
+  signature: string
+  updated_at: string
+}
+
 export interface Profile {
   id: string
   name: string
   email: string
   taste_summary: string | null
+  taste_axes: TasteAxes | null
   genres: string[]
   onboarded_at: string | null
   created_at: string

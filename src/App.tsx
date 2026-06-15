@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Shelf from './pages/Shelf'
 import Discover from './pages/Discover'
 import Librarian from './pages/Librarian'
+import Taste from './pages/Taste'
 import Settings from './pages/Settings'
 import Onboarding from './pages/Onboarding'
 import Layout from './components/Layout'
@@ -29,6 +30,7 @@ function AppRoutes() {
         <Route path="/shelf" element={<Shelf />} />
         <Route path="/discover" element={<Discover />} />
         <Route path="/librarian" element={<Librarian />} />
+        <Route path="/taste" element={<Taste />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/shelf" replace />} />
       </Routes>

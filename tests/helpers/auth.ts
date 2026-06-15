@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import type { Profile } from '../../src/types'
+import type { Profile, TasteAxes } from '../../src/types'
 
 export const TEST_USER_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -30,17 +30,20 @@ export interface InjectAuthOptions {
   onboarded?: boolean
   name?: string
   userBooks?: unknown[]
+  tasteSummary?: string | null
+  tasteAxes?: TasteAxes | null
 }
 
 export async function injectAuth(page: Page, opts: InjectAuthOptions = {}) {
-  const { onboarded = true, name = 'Test User', userBooks = [] } = opts
+  const { onboarded = true, name = 'Test User', userBooks = [], tasteSummary = null, tasteAxes = null } = opts
   const accessToken = makeFakeJwt(TEST_USER_ID)
 
   const profile: Profile = {
     id: TEST_USER_ID,
     name,
     email: 'test@example.com',
-    taste_summary: null,
+    taste_summary: tasteSummary,
+    taste_axes: tasteAxes,
     genres: [],
     onboarded_at: onboarded ? '2024-01-01T00:00:00.000Z' : null,
     created_at: '2024-01-01T00:00:00.000Z',
@@ -104,6 +107,12 @@ export async function injectAuth(page: Page, opts: InjectAuthOptions = {}) {
     } else {
       await route.fulfill({ contentType: 'application/json', body: '{}' })
     }
+  })
+
+  // Edge functions (e.g. the librarian taste-profile recompute). Echo back the
+  // injected axes so a triggered recompute resolves instead of hitting the network.
+  await page.route(url => url.href.includes('/functions/v1/'), async route => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ taste_axes: tasteAxes }) })
   })
 
   // Catch-all for Supabase auth endpoints so token refresh never fails
