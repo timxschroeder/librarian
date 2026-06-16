@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { UserBook } from '../types'
+import type { KindleStatus, UserBook } from '../types'
 
 interface Props {
   userBook: UserBook
@@ -8,6 +8,10 @@ interface Props {
   flagged?: boolean
   /** When set, show a quick remove control — used during "just added" import review. */
   onRemove?: (userBookId: string) => void
+  /** Current Send-to-Kindle status for this book, if a request exists. */
+  kindleStatus?: KindleStatus | null
+  /** When set, show the Send-to-Kindle action on the cover; called with the book id. */
+  onSendToKindle?: (bookId: string) => void
 }
 
 const SPINE_COLORS = [
@@ -27,7 +31,7 @@ function spineColor(title: string): string {
   return SPINE_COLORS[hash % SPINE_COLORS.length]
 }
 
-export default function BookCard({ userBook, onRate, flagged, onRemove }: Props) {
+export default function BookCard({ userBook, onRate, flagged, onRemove, kindleStatus, onSendToKindle }: Props) {
   const { book, rating } = userBook
   const [hovered, setHovered] = useState<number | null>(null)
 
@@ -79,6 +83,59 @@ export default function BookCard({ userBook, onRate, flagged, onRemove }: Props)
               <path d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+        )}
+        {onSendToKindle && (
+          <div className="absolute inset-x-0 bottom-0">
+            {kindleStatus == null ? (
+              <button
+                type="button"
+                onClick={() => onSendToKindle(book.id)}
+                aria-label={`Send ${book.title} to Kindle`}
+                className="w-full bg-ink/60 text-white text-[11px] font-body font-medium py-1.5 flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <rect x="5" y="2" width="14" height="20" rx="2" />
+                  <line x1="10" y1="18.5" x2="14" y2="18.5" />
+                </svg>
+                Add to Kindle
+              </button>
+            ) : kindleStatus === 'pending' ? (
+              <div className="w-full bg-ink/65 text-white/90 text-[11px] font-body py-1.5 flex items-center justify-center gap-1.5" title="Queued — waiting for the delivery worker">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+                Queued
+              </div>
+            ) : kindleStatus === 'fetching' ? (
+              <div className="w-full bg-ink/65 text-white text-[11px] font-body py-1.5 flex items-center justify-center gap-1.5" title="Sending to your Kindle">
+                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin block" />
+                Sending…
+              </div>
+            ) : kindleStatus === 'sent' ? (
+              <div className="w-full bg-forest-700/90 text-white text-[11px] font-body font-medium py-1.5 flex items-center justify-center gap-1.5" title="Delivered to your Kindle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <path d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                On your Kindle
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSendToKindle(book.id)}
+                aria-label={`Retry sending ${book.title} to Kindle`}
+                title="Couldn't find this book — tap to try again"
+                className="w-full bg-amber-800/90 text-white text-[11px] font-body font-medium py-1.5 flex items-center justify-center gap-1.5 hover:bg-amber-800 transition-colors"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <path d="M10.3 3.86 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.86a2 2 0 0 0-3.4 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                Couldn't find it · Retry
+              </button>
+            )}
+          </div>
         )}
       </div>
       <div>

@@ -10,6 +10,11 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [kindleEmail, setKindleEmail] = useState(profile?.kindle_email ?? '')
+  const [savingKindle, setSavingKindle] = useState(false)
+  const [savedKindle, setSavedKindle] = useState(false)
+  const [kindleError, setKindleError] = useState<string | null>(null)
+
   async function saveName() {
     if (!user || !name.trim()) return
     setSaving(true)
@@ -24,6 +29,23 @@ export default function Settings() {
       setError((err as { message?: string })?.message ?? 'Could not save. Try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveKindle() {
+    if (!user) return
+    setSavingKindle(true)
+    setKindleError(null)
+    try {
+      await updateProfile(user.id, { kindle_email: kindleEmail.trim() || null })
+      await refreshProfile()
+      setSavedKindle(true)
+      setTimeout(() => setSavedKindle(false), 2000)
+    } catch (err) {
+      console.error('Failed to save Kindle email', err)
+      setKindleError((err as { message?: string })?.message ?? 'Could not save. Try again.')
+    } finally {
+      setSavingKindle(false)
     }
   }
 
@@ -58,6 +80,33 @@ export default function Settings() {
             </button>
           </div>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
+          <h2 className="text-xs font-body font-semibold text-muted uppercase tracking-widest mb-4">Kindle delivery</h2>
+          <label className="block text-xs font-body text-muted mb-1.5">Your Kindle email</label>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={kindleEmail}
+              onChange={(e) => setKindleEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveKindle()}
+              placeholder="you@kindle.com"
+              className="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm font-body text-ink focus:outline-none focus:ring-2 focus:ring-forest-700"
+            />
+            <button
+              onClick={saveKindle}
+              disabled={savingKindle}
+              className="bg-forest-700 text-white px-4 py-2 rounded-lg text-sm font-body font-medium disabled:opacity-40 hover:bg-forest-900 transition-colors min-w-[56px]"
+            >
+              {savedKindle ? '✓' : savingKindle ? '...' : 'Save'}
+            </button>
+          </div>
+          {kindleError && <p className="mt-2 text-sm text-red-600">{kindleError}</p>}
+          <p className="mt-3 text-xs text-muted leading-relaxed">
+            Find it under <span className="text-ink">Manage Your Content and Devices → Preferences → Personal Document Settings</span> on Amazon.
+            You'll also need to add Librarian's sending address to your <span className="text-ink">Approved Personal Document Email List</span> there, or deliveries get rejected.
+          </p>
         </div>
 
         <button

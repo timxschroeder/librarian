@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Book, ChatMessage, Profile, UserBook } from '../types'
+import type { Book, ChatMessage, KindleRequest, Profile, UserBook } from '../types'
 
 // Single home for every Supabase table call. The Supabase JS client never throws —
 // it returns `{ data, error }` — so each function checks `error` and throws once,
@@ -109,6 +109,47 @@ export async function bulkAddBooks(
 export async function deleteUserBook(userBookId: string): Promise<void> {
   const { error } = await supabase.from('user_books').delete().eq('id', userBookId)
   if (error) throw error
+}
+
+// ── Send to Kindle ──────────────────────────────────────────────────────────
+// The app only writes intent here; a private local worker fulfils it. See
+// docs/.. (kept out of this repo) and the project memory for the full design.
+
+/** Every Kindle request for a user, keyed by book elsewhere. Owner-only via RLS. */
+export async function getKindleRequests(userId: string): Promise<KindleRequest[]> {
+  const { data, error } = await supabase
+    .from('kindle_requests')
+    .select('*')
+    .eq('user_id', userId)
+  if (error) throw error
+  return (data as KindleRequest[]) ?? []
+}
+
+/**
+ * Queue (or re-queue) a book for Kindle delivery. One row per (user, book): a retry
+ * re-uses the row and resets it to `pending`, clearing any prior error/source/sent_at,
+ * so the worker treats it as fresh. Returns the row so the caller can reflect status.
+ */
+export async function createKindleRequest(userId: string, bookId: string): Promise<KindleRequest> {
+  const { data, error } = await supabase
+    .from('kindle_requests')
+    .upsert(
+      {
+        user_id: userId,
+        book_id: bookId,
+        status: 'pending',
+        source: null,
+        error: null,
+        sent_at: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,book_id' },
+    )
+    .select('*')
+    .single()
+  if (error) throw error
+  if (!data) throw new Error('Could not queue this book for Kindle. Try again.')
+  return data as KindleRequest
 }
 
 export async function getChatHistory(userId: string): Promise<ChatMessage[]> {
