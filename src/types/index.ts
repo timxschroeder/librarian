@@ -29,6 +29,7 @@ export interface Profile {
   genres: string[]
   onboarded_at: string | null
   created_at: string
+  reading_goal: number | null
 }
 
 export interface Book {

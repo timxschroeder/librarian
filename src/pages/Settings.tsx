@@ -10,6 +10,11 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [goal, setGoal] = useState(profile?.reading_goal != null ? String(profile.reading_goal) : '')
+  const [savingGoal, setSavingGoal] = useState(false)
+  const [savedGoal, setSavedGoal] = useState(false)
+  const [goalError, setGoalError] = useState<string | null>(null)
+
   async function saveName() {
     if (!user || !name.trim()) return
     setSaving(true)
@@ -24,6 +29,29 @@ export default function Settings() {
       setError((err as { message?: string })?.message ?? 'Could not save. Try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveGoal() {
+    if (!user) return
+    const trimmed = goal.trim()
+    const n = trimmed === '' ? null : Number(trimmed)
+    if (n != null && (!Number.isInteger(n) || n <= 0)) {
+      setGoalError('Enter a whole number greater than 0.')
+      return
+    }
+    setSavingGoal(true)
+    setGoalError(null)
+    try {
+      await updateProfile(user.id, { reading_goal: n })
+      await refreshProfile()
+      setSavedGoal(true)
+      setTimeout(() => setSavedGoal(false), 2000)
+    } catch (err) {
+      console.error('Failed to save reading goal', err)
+      setGoalError((err as { message?: string })?.message ?? 'Could not save. Try again.')
+    } finally {
+      setSavingGoal(false)
     }
   }
 
@@ -52,12 +80,42 @@ export default function Settings() {
             <button
               onClick={saveName}
               disabled={saving || !name.trim()}
+              aria-label="Save display name"
               className="bg-forest-700 text-white px-4 py-2 rounded-lg text-sm font-body font-medium disabled:opacity-40 hover:bg-forest-900 transition-colors min-w-[56px]"
             >
               {saved ? '✓' : saving ? '...' : 'Save'}
             </button>
           </div>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
+          <h2 className="text-xs font-body font-semibold text-muted uppercase tracking-widest mb-4">Reading goal</h2>
+          <p className="text-sm text-muted mb-3">
+            Set how many books you want to read. Your shelf will track progress and celebrate when you hit it.
+          </p>
+          <label className="block text-xs font-body text-muted mb-1.5">Books to read</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="1"
+              inputMode="numeric"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveGoal()}
+              placeholder="e.g. 24"
+              className="flex-1 border border-border rounded-lg px-3 py-2 text-sm font-body text-ink focus:outline-none focus:ring-2 focus:ring-forest-700"
+            />
+            <button
+              onClick={saveGoal}
+              disabled={savingGoal}
+              aria-label="Save reading goal"
+              className="bg-forest-700 text-white px-4 py-2 rounded-lg text-sm font-body font-medium disabled:opacity-40 hover:bg-forest-900 transition-colors min-w-[56px]"
+            >
+              {savedGoal ? '✓' : savingGoal ? '...' : 'Save'}
+            </button>
+          </div>
+          {goalError && <p className="mt-2 text-sm text-red-600">{goalError}</p>}
         </div>
 
         <button

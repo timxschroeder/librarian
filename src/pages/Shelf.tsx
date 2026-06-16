@@ -5,7 +5,13 @@ import BookCard from '../components/BookCard'
 import AddBookModal from '../components/AddBookModal'
 import BulkImportModal, { type ImportResult } from '../components/BulkImportModal'
 import Bertha from '../components/Bertha'
+import GoalProgress from '../components/GoalProgress'
+import GoalCelebration from '../components/GoalCelebration'
 import type { UserBook } from '../types'
+
+function goalCelebratedKey(userId: string): string {
+  return `librarian:goal-celebrated:${userId}`
+}
 
 export default function Shelf() {
   const { user, profile } = useAuth()
@@ -16,6 +22,7 @@ export default function Shelf() {
   const [showImport, setShowImport] = useState(false)
   // The transient "just added" review batch — ephemeral client state, not persisted.
   const [batch, setBatch] = useState<ImportResult | null>(null)
+  const [showCelebration, setShowCelebration] = useState(false)
 
   const fetchBooks = useCallback(async () => {
     if (!user) return
@@ -33,6 +40,24 @@ export default function Shelf() {
   useEffect(() => {
     fetchBooks()
   }, [fetchBooks])
+
+  // Celebrate once per goal value reached, not on every shelf visit — remembered
+  // per-user in localStorage so re-reaching the same goal after a page reload
+  // doesn't replay the animation.
+  useEffect(() => {
+    if (!user || !profile?.reading_goal) return
+    const goal = profile.reading_goal
+    if (userBooks.length < goal) return
+    if (localStorage.getItem(goalCelebratedKey(user.id)) === String(goal)) return
+    setShowCelebration(true)
+  }, [user, profile?.reading_goal, userBooks.length])
+
+  function dismissCelebration() {
+    if (user && profile?.reading_goal) {
+      localStorage.setItem(goalCelebratedKey(user.id), String(profile.reading_goal))
+    }
+    setShowCelebration(false)
+  }
 
   async function handleRate(userBookId: string, rating: number | null) {
     setUserBooks((prev) =>
@@ -135,6 +160,9 @@ export default function Shelf() {
         </div>
       ) : (
         <>
+          {profile?.reading_goal ? (
+            <GoalProgress count={userBooks.length} goal={profile.reading_goal} />
+          ) : null}
           {batch ? (
             <div className="mb-5 rounded-xl border border-forest-700/20 bg-forest-700/5 p-4 flex items-start gap-3">
               <Bertha expression="delighted" size={36} className="flex-shrink-0 -mt-1" />
@@ -161,7 +189,9 @@ export default function Shelf() {
               </button>
             </div>
           ) : (
-            <p className="text-xs text-muted mb-4">{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'} read</p>
+            !profile?.reading_goal && (
+              <p className="text-xs text-muted mb-4">{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'} read</p>
+            )
           )}
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
             {userBooks.map((ub) => {
@@ -172,7 +202,8 @@ export default function Shelf() {
                   userBook={ub}
                   onRate={handleRate}
                   flagged={inBatch && flaggedBookIds.has(ub.book_id)}
-                  onRemove={inBatch ? handleRemove : undefined}
+                  onRemove={handleRemove}
+                  removeAlwaysVisible={inBatch}
                 />
               )
             })}
@@ -185,6 +216,9 @@ export default function Shelf() {
       )}
       {showImport && (
         <BulkImportModal onClose={() => setShowImport(false)} onImported={handleImported} />
+      )}
+      {showCelebration && profile?.reading_goal && (
+        <GoalCelebration goal={profile.reading_goal} onDismiss={dismissCelebration} />
       )}
     </div>
   )
