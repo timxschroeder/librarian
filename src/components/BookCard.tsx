@@ -6,8 +6,10 @@ interface Props {
   onRate?: (userBookId: string, rating: number | null) => void
   /** Mark a freshly-imported best-guess match for review (amber flag). */
   flagged?: boolean
-  /** When set, show a quick remove control — used during "just added" import review. */
+  /** When set, show a quick remove control. */
   onRemove?: (userBookId: string) => void
+  /** Keep the remove control visible without hovering — used during "just added" import review. */
+  removeAlwaysVisible?: boolean
   /** Current Send-to-Kindle status for this book, if a request exists. */
   kindleStatus?: KindleStatus | null
   /** When set, show the Send-to-Kindle action on the cover; called with the book id. */
@@ -31,7 +33,7 @@ function spineColor(title: string): string {
   return SPINE_COLORS[hash % SPINE_COLORS.length]
 }
 
-export default function BookCard({ userBook, onRate, flagged, onRemove, kindleStatus, onSendToKindle }: Props) {
+export default function BookCard({ userBook, onRate, flagged, onRemove, removeAlwaysVisible, kindleStatus, onSendToKindle }: Props) {
   const { book, rating } = userBook
   const [hovered, setHovered] = useState<number | null>(null)
 
@@ -77,7 +79,9 @@ export default function BookCard({ userBook, onRate, flagged, onRemove, kindleSt
             type="button"
             onClick={() => onRemove(userBook.id)}
             aria-label={`Remove ${book.title}`}
-            className="absolute top-1 right-1 flex items-center justify-center w-5 h-5 rounded-full bg-white/90 text-burgundy-700 shadow-sm hover:bg-white transition-colors"
+            className={`absolute top-1 right-1 flex items-center justify-center w-5 h-5 rounded-full bg-white/90 text-burgundy-700 shadow-sm hover:bg-white transition-opacity ${
+              removeAlwaysVisible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+            }`}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
               <path d="M6 18L18 6M6 6l12 12" />

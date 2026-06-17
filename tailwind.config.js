@@ -28,6 +28,29 @@ export default {
         display: ['Playfair Display', 'Georgia', 'serif'],
         body: ['Inter', 'system-ui', 'sans-serif'],
       },
+      keyframes: {
+        'confetti-fall': {
+          '0%': { transform: 'translateY(-10%) rotate(0deg)', opacity: '1' },
+          '85%': { opacity: '1' },
+          '100%': { transform: 'translateY(110vh) rotate(360deg)', opacity: '0' },
+        },
+        'bertha-dance': {
+          '0%, 100%': { transform: 'rotate(-8deg) translateY(0)' },
+          '25%': { transform: 'rotate(6deg) translateY(-6px)' },
+          '50%': { transform: 'rotate(-4deg) translateY(0)' },
+          '75%': { transform: 'rotate(8deg) translateY(-6px)' },
+        },
+        'pop-in': {
+          '0%': { transform: 'scale(0.85)', opacity: '0' },
+          '60%': { transform: 'scale(1.03)', opacity: '1' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+      },
+      animation: {
+        'confetti-fall': 'confetti-fall 2.6s linear forwards',
+        'bertha-dance': 'bertha-dance 0.9s ease-in-out infinite',
+        'pop-in': 'pop-in 0.4s ease-out',
+      },
     },
   },
   plugins: [],

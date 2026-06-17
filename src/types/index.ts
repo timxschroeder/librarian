@@ -29,6 +29,7 @@ export interface Profile {
   genres: string[]
   onboarded_at: string | null
   created_at: string
+  reading_goal: number | null
   /** Where "Send to Kindle" deliveries go, e.g. tim_a1b2@kindle.com. Null until set. */
   kindle_email: string | null
 }

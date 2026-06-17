@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import BookCard from './BookCard'
 import type { UserBook } from '../types'
 
@@ -25,6 +26,32 @@ const userBook: UserBook = {
   },
   profile: { id: 'u1', name: 'Tim' },
 }
+
+describe('BookCard', () => {
+  it('calls onRemove with the userBook id when the remove control is clicked', async () => {
+    const user = userEvent.setup()
+    const onRemove = vi.fn()
+    render(<BookCard userBook={userBook} onRemove={onRemove} />)
+
+    await user.click(screen.getByRole('button', { name: 'Remove The Overstory' }))
+    expect(onRemove).toHaveBeenCalledWith('ub1')
+  })
+
+  it('keeps the remove control hidden until hover by default', () => {
+    render(<BookCard userBook={userBook} onRemove={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Remove The Overstory' })).toHaveClass('opacity-0')
+  })
+
+  it('keeps the remove control always visible when removeAlwaysVisible is set', () => {
+    render(<BookCard userBook={userBook} onRemove={vi.fn()} removeAlwaysVisible />)
+    expect(screen.getByRole('button', { name: 'Remove The Overstory' })).toHaveClass('opacity-100')
+  })
+
+  it('renders no remove control when onRemove is not provided', () => {
+    render(<BookCard userBook={userBook} />)
+    expect(screen.queryByRole('button', { name: 'Remove The Overstory' })).not.toBeInTheDocument()
+  })
+})
 
 describe('BookCard — Send to Kindle', () => {
   it('shows no Kindle action when onSendToKindle is absent', () => {
