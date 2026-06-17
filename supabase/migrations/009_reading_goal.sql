@@ -1,4 +1,4 @@
--- 008_reading_goal.sql
+-- 009_reading_goal.sql
 -- A simple yearly reading goal the user sets in Settings (number of books).
 -- The shelf reads it to render a progress bar and trigger the celebration
 -- animation once the goal is met. Null means "no goal set".

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getUserBooks, updateUserBookRating, deleteUserBook } from '../lib/db'
+import { getUserBooks, updateUserBookRating, deleteUserBook, getKindleRequests, createKindleRequest } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import BookCard from '../components/BookCard'
 import AddBookModal from '../components/AddBookModal'
@@ -7,7 +7,7 @@ import BulkImportModal, { type ImportResult } from '../components/BulkImportModa
 import Bertha from '../components/Bertha'
 import GoalProgress from '../components/GoalProgress'
 import GoalCelebration from '../components/GoalCelebration'
-import type { UserBook } from '../types'
+import type { KindleStatus, UserBook } from '../types'
 
 function goalCelebratedKey(userId: string): string {
   return `librarian:goal-celebrated:${userId}`
@@ -23,6 +23,9 @@ export default function Shelf() {
   // The transient "just added" review batch — ephemeral client state, not persisted.
   const [batch, setBatch] = useState<ImportResult | null>(null)
   const [showCelebration, setShowCelebration] = useState(false)
+  // Send-to-Kindle status per book_id, mirrored from kindle_requests.
+  const [requests, setRequests] = useState<Map<string, KindleStatus>>(new Map())
+  const [kindleNotice, setKindleNotice] = useState<string | null>(null)
 
   const fetchBooks = useCallback(async () => {
     if (!user) return
@@ -37,9 +40,52 @@ export default function Shelf() {
     }
   }, [user])
 
+  const fetchRequests = useCallback(async () => {
+    if (!user) return
+    try {
+      const rows = await getKindleRequests(user.id)
+      setRequests(new Map(rows.map((r) => [r.book_id, r.status])))
+    } catch (err) {
+      // Non-fatal: the shelf still works, the Kindle badges just won't show.
+      console.error('Failed to load Kindle requests', err)
+    }
+  }, [user])
+
   useEffect(() => {
     fetchBooks()
-  }, [fetchBooks])
+    fetchRequests()
+  }, [fetchBooks, fetchRequests])
+
+  // A queued/sending request advances on the worker's schedule, not ours, so refetch
+  // when the tab regains focus and poll gently while anything is still in flight.
+  useEffect(() => {
+    const active = [...requests.values()].some((s) => s === 'pending' || s === 'fetching')
+    const onFocus = () => fetchRequests()
+    window.addEventListener('focus', onFocus)
+    const id = active ? window.setInterval(fetchRequests, 15000) : undefined
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      if (id) window.clearInterval(id)
+    }
+  }, [requests, fetchRequests])
+
+  async function handleSendToKindle(bookId: string) {
+    if (!user) return
+    if (!profile?.kindle_email) {
+      setKindleNotice('Add your Kindle email in Settings before sending books.')
+      return
+    }
+    setKindleNotice(null)
+    const prev = requests
+    setRequests((m) => new Map(m).set(bookId, 'pending'))
+    try {
+      await createKindleRequest(user.id, bookId)
+    } catch (err) {
+      console.error('Failed to queue Kindle delivery', err)
+      setRequests(prev)
+      setKindleNotice((err as { message?: string })?.message ?? 'Could not send to Kindle. Try again.')
+    }
+  }
 
   // Celebrate once per goal value reached, not on every shelf visit — remembered
   // per-user in localStorage so re-reaching the same goal after a page reload
@@ -163,6 +209,17 @@ export default function Shelf() {
           {profile?.reading_goal ? (
             <GoalProgress count={userBooks.length} goal={profile.reading_goal} />
           ) : null}
+          {kindleNotice && (
+            <div className="mb-4 rounded-xl border border-amber-800/30 bg-amber-100/50 px-4 py-3 flex items-start gap-3 text-sm">
+              <span className="flex-1 text-amber-900">{kindleNotice}</span>
+              <button
+                onClick={() => setKindleNotice(null)}
+                className="text-amber-800 font-medium hover:opacity-70 transition-opacity flex-shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           {batch ? (
             <div className="mb-5 rounded-xl border border-forest-700/20 bg-forest-700/5 p-4 flex items-start gap-3">
               <Bertha expression="delighted" size={36} className="flex-shrink-0 -mt-1" />
@@ -204,6 +261,8 @@ export default function Shelf() {
                   flagged={inBatch && flaggedBookIds.has(ub.book_id)}
                   onRemove={handleRemove}
                   removeAlwaysVisible={inBatch}
+                  onSendToKindle={handleSendToKindle}
+                  kindleStatus={requests.get(ub.book_id) ?? null}
                 />
               )
             })}

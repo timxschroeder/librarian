@@ -19,6 +19,8 @@ import {
   completeOnboarding,
   getChatHistory,
   saveChatMessage,
+  getKindleRequests,
+  createKindleRequest,
   type OnboardingBook,
 } from './db'
 import type { Book } from '../types'
@@ -163,6 +165,42 @@ describe('deleteUserBook', () => {
   it('throws on a Supabase error', async () => {
     setClient({ tables: { user_books: { error: { message: 'denied' } } } })
     await expect(deleteUserBook('ub1')).rejects.toMatchObject({ message: 'denied' })
+  })
+})
+
+describe('getKindleRequests', () => {
+  it('returns the rows on success', async () => {
+    setClient({ tables: { kindle_requests: { data: [{ id: 'k1', book_id: 'b1', status: 'pending' }] } } })
+    expect(await getKindleRequests('u1')).toEqual([{ id: 'k1', book_id: 'b1', status: 'pending' }])
+  })
+
+  it('returns [] when there are no rows', async () => {
+    setClient({ tables: { kindle_requests: { data: null } } })
+    expect(await getKindleRequests('u1')).toEqual([])
+  })
+
+  it('throws on a Supabase error', async () => {
+    setClient({ tables: { kindle_requests: { error: { message: 'rls' } } } })
+    await expect(getKindleRequests('u1')).rejects.toMatchObject({ message: 'rls' })
+  })
+})
+
+describe('createKindleRequest', () => {
+  it('returns the upserted row on success', async () => {
+    setClient({ tables: { kindle_requests: { data: { id: 'k1', book_id: 'b1', status: 'pending' } } } })
+    expect(await createKindleRequest('u1', 'b1')).toMatchObject({ id: 'k1', status: 'pending' })
+  })
+
+  it('throws when the upsert is denied (grant/RLS bug)', async () => {
+    setClient({ tables: { kindle_requests: { error: { message: 'permission denied for table kindle_requests' } } } })
+    await expect(createKindleRequest('u1', 'b1')).rejects.toMatchObject({
+      message: 'permission denied for table kindle_requests',
+    })
+  })
+
+  it('throws when no row comes back', async () => {
+    setClient({ tables: { kindle_requests: { data: null } } })
+    await expect(createKindleRequest('u1', 'b1')).rejects.toThrow(/Could not queue/)
   })
 })
 

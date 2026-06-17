@@ -30,6 +30,28 @@ export interface Profile {
   onboarded_at: string | null
   created_at: string
   reading_goal: number | null
+  /** Where "Send to Kindle" deliveries go, e.g. tim_a1b2@kindle.com. Null until set. */
+  kindle_email: string | null
+}
+
+/**
+ * Lifecycle of a Send-to-Kindle request (see migration 008). `pending` = queued, the
+ * worker hasn't started; `fetching` = actively downloading; `no_source` = no source
+ * had the book. The UI shows a spinner only for `fetching` — `pending` can sit for
+ * hours if the worker's machine is offline, so it gets a static "Queued" instead.
+ */
+export type KindleStatus = 'pending' | 'fetching' | 'sent' | 'failed' | 'no_source'
+
+export interface KindleRequest {
+  id: string
+  user_id: string
+  book_id: string
+  status: KindleStatus
+  source: string | null
+  error: string | null
+  created_at: string
+  updated_at: string
+  sent_at: string | null
 }
 
 export interface Book {
