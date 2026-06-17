@@ -1,8 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { completeOnboarding, type OnboardingBook } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { GENRES, CURATED_BOOKS, type CuratedBook } from '../data/onboardingBooks'
+import { coverUrl } from '../lib/openLibrary'
 import Bertha from '../components/Bertha'
+
+// Books shown before the first "Show more" tap, and revealed per tap after.
+// Pools are 32/genre, so two even pages of 16.
+const PAGE_SIZE = 16
 
 const SPINE_COLORS = ['bg-forest-700', 'bg-burgundy-700', 'bg-forest-900']
 
@@ -23,7 +28,7 @@ function BookCover({ book }: { book: CuratedBook }) {
   }
   return (
     <img
-      src={`https://covers.openlibrary.org/b/isbn/${book.isbn}-M.jpg`}
+      src={coverUrl(book.coverId, 'M')}
       alt={book.title}
       className="w-full h-full object-cover"
       onError={() => setFailed(true)}
@@ -37,6 +42,7 @@ export default function Onboarding() {
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set())
   const [selectedBooks, setSelectedBooks] = useState<Map<string, number>>(new Map())
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -45,7 +51,8 @@ export default function Onboarding() {
     [selectedGenres]
   )
 
-  const visibleBooks = useMemo(() => {
+  // Every book in scope for the current filter, most-read first (data is pre-sorted).
+  const matchingBooks = useMemo(() => {
     const seen = new Set<string>()
     const out: CuratedBook[] = []
     for (const b of CURATED_BOOKS) {
@@ -56,6 +63,12 @@ export default function Onboarding() {
     }
     return out
   }, [selectedGenres, activeFilter])
+
+  // Reset paging whenever the filter changes so each tab starts from the top.
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [activeFilter])
+
+  const visibleBooks = matchingBooks.slice(0, visibleCount)
+  const remaining = matchingBooks.length - visibleBooks.length
 
   function toggleGenre(key: string) {
     setSelectedGenres(prev => {
@@ -92,8 +105,8 @@ export default function Onboarding() {
             id: b.id,
             title: b.title,
             author: b.author,
-            cover_url: `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg`,
-            isbn: b.isbn,
+            cover_url: coverUrl(b.coverId, 'M'),
+            isbn: null,
             description: null,
             first_publish_year: null,
             subjects: null,
@@ -248,6 +261,16 @@ export default function Onboarding() {
                 )
               })}
             </div>
+
+            {remaining > 0 && (
+              <button
+                onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+                className="w-full mb-6 py-2.5 rounded-full bg-parchment border border-border text-forest-700 text-xs font-body font-medium hover:border-forest-700/40 transition-colors"
+              >
+                Show {Math.min(PAGE_SIZE, remaining)} more
+                <span className="text-muted font-normal"> · {visibleBooks.length} of {matchingBooks.length}</span>
+              </button>
+            )}
 
             <div className="flex items-center justify-between">
               <button onClick={complete} className="text-sm text-muted hover:text-ink transition-colors" disabled={saving}>

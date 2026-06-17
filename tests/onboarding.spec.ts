@@ -15,14 +15,15 @@ test.describe('Onboarding flow', () => {
     await injectAuth(page, { onboarded: false })
   })
 
-  test('step 1 — genre grid renders all 12 genres', async ({ page }) => {
+  test('step 1 — genre grid renders all 19 genres', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('What do you love to read?')).toBeVisible()
-    // 12 genre buttons; filter by their label text
+    // 19 genre buttons; filter by their label text
     const labels = [
-      'Literary Fiction', 'Mystery & Thriller', 'Sci-Fi & Fantasy', 'Historical Fiction',
-      'Biography & Memoir', 'Science & Nature', 'Essays', 'Poetry',
-      'Self-Help', 'History', 'Philosophy', 'Humor',
+      'Literary Fiction', 'Love & Romance', 'Mystery & Thriller', 'Science Fiction',
+      'Fantasy', 'Historical Fiction', 'Horror', 'Classics', 'Biography & Memoir',
+      'History', 'Science & Nature', 'Philosophy', 'Essays', 'Poetry',
+      'Self-Help', 'Humor', 'Business & Economics', 'Technology', 'Religion & Spirituality',
     ]
     for (const label of labels) {
       await expect(page.getByText(label)).toBeVisible()
@@ -54,15 +55,16 @@ test.describe('Onboarding flow', () => {
     await page.getByRole('button', { name: 'Continue' }).click()
 
     await expect(page.getByText("Pick books you've loved")).toBeVisible()
-    // "All" tab and the selected genre tab should appear
-    await expect(page.getByRole('button', { name: 'All' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Literary Fiction' })).toBeVisible()
+    // "All" tab and the selected genre tab should appear (exact: book covers carry
+    // their title as accessible name, so a loose "All" also matches "All the Light…")
+    await expect(page.getByRole('button', { name: 'All', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Literary Fiction', exact: true })).toBeVisible()
   })
 
   test('step 2 — selecting a book updates the count', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('What do you love to read?')).toBeVisible()
-    await page.getByText('Sci-Fi & Fantasy').click()
+    await page.getByText('Science Fiction').click()
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByText("Pick books you've loved")).toBeVisible()
 

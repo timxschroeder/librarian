@@ -9,7 +9,7 @@ vi.mock('../lib/db', () => ({
 
 const refreshProfile = vi.fn()
 const signOut = vi.fn()
-let profile: { name: string; reading_goal: number | null }
+let profile: { name: string; reading_goal: number | null; onboarded_at: string | null }
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1', email: 'tim@example.com' }, profile, signOut, refreshProfile }),
 }))
@@ -20,7 +20,7 @@ beforeEach(() => {
   updateProfile.mockReset().mockResolvedValue(undefined)
   refreshProfile.mockReset()
   signOut.mockReset()
-  profile = { name: 'Tim', reading_goal: null }
+  profile = { name: 'Tim', reading_goal: null, onboarded_at: '2026-01-01' }
 })
 
 describe('Settings — reading goal', () => {
@@ -48,7 +48,7 @@ describe('Settings — reading goal', () => {
   })
 
   it('clears the goal when the field is emptied', async () => {
-    profile = { name: 'Tim', reading_goal: 24 }
+    profile = { name: 'Tim', reading_goal: 24, onboarded_at: '2026-01-01' }
     const user = userEvent.setup()
     render(<Settings />)
 
@@ -68,5 +68,28 @@ describe('Settings — reading goal', () => {
     await user.click(screen.getByRole('button', { name: 'Save reading goal' }))
 
     expect(await screen.findByText('denied')).toBeInTheDocument()
+  })
+})
+
+describe('Settings — redo onboarding', () => {
+  it('clears onboarded_at and refreshes the profile so the gate re-shows Onboarding', async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+
+    await user.click(screen.getByRole('button', { name: 'Redo onboarding' }))
+
+    expect(updateProfile).toHaveBeenCalledWith('u1', { onboarded_at: null })
+    expect(refreshProfile).toHaveBeenCalled()
+  })
+
+  it('surfaces an error and does not refresh when the reset fails', async () => {
+    updateProfile.mockRejectedValue(new Error('permission denied for table profiles'))
+    const user = userEvent.setup()
+    render(<Settings />)
+
+    await user.click(screen.getByRole('button', { name: 'Redo onboarding' }))
+
+    expect(await screen.findByText(/permission denied for table profiles/)).toBeInTheDocument()
+    expect(refreshProfile).not.toHaveBeenCalled()
   })
 })

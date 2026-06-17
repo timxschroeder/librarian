@@ -20,6 +20,25 @@ export default function Settings() {
   const [savedKindle, setSavedKindle] = useState(false)
   const [kindleError, setKindleError] = useState<string | null>(null)
 
+  const [redoing, setRedoing] = useState(false)
+  const [redoError, setRedoError] = useState<string | null>(null)
+
+  // Clearing onboarded_at trips the App routing gate back to <Onboarding />.
+  // Existing shelf books and genres are untouched until the flow is completed again.
+  async function redoOnboarding() {
+    if (!user) return
+    setRedoing(true)
+    setRedoError(null)
+    try {
+      await updateProfile(user.id, { onboarded_at: null })
+      await refreshProfile()
+    } catch (err) {
+      console.error('Failed to restart onboarding', err)
+      setRedoError((err as { message?: string })?.message ?? 'Could not restart. Try again.')
+      setRedoing(false)
+    }
+  }
+
   async function saveName() {
     if (!user || !name.trim()) return
     setSaving(true)
@@ -165,6 +184,21 @@ export default function Settings() {
             Find it under <span className="text-ink">Manage Your Content and Devices → Preferences → Personal Document Settings</span> on Amazon.
             You'll also need to add Librarian's sending address to your <span className="text-ink">Approved Personal Document Email List</span> there, or deliveries get rejected.
           </p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
+          <h2 className="text-xs font-body font-semibold text-muted uppercase tracking-widest mb-4">Onboarding</h2>
+          <button
+            onClick={redoOnboarding}
+            disabled={redoing}
+            className="w-full py-2.5 rounded-lg border border-border text-sm font-body font-medium text-forest-700 hover:bg-forest-700/5 disabled:opacity-40 transition-colors"
+          >
+            {redoing ? 'Restarting…' : 'Redo onboarding'}
+          </button>
+          <p className="mt-3 text-xs text-muted leading-relaxed">
+            Pick your genres and starter books again. Your existing shelf stays put.
+          </p>
+          {redoError && <p className="mt-2 text-sm text-red-600">{redoError}</p>}
         </div>
 
         <button

@@ -60,4 +60,19 @@ describe('Onboarding', () => {
     expect(completeOnboarding).toHaveBeenCalledWith('u1', ['literary'], expect.any(Array))
     expect(refreshProfile).toHaveBeenCalled()
   })
+
+  // The curated pool is large (~40/genre), so the picker pages with "Show more"
+  // rather than dumping everything — reveal the rest on demand.
+  it('reveals more books on demand and hides the control once all are shown', async () => {
+    const user = userEvent.setup()
+    render(<Onboarding />)
+    await reachGetStarted(user)
+
+    const more = screen.getByRole('button', { name: /Show \d+ more/ })
+    expect(more).toHaveTextContent(/16 of \d+/)
+
+    await user.click(more)
+    // Literary has 32 curated books; 16 + 16 covers them all, so the control goes away.
+    expect(screen.queryByRole('button', { name: /Show \d+ more/ })).toBeNull()
+  })
 })
