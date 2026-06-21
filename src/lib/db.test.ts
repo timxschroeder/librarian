@@ -14,6 +14,7 @@ import {
   updateProfile,
   getUserBooks,
   upsertBookAndUserBook,
+  rejectBook,
   bulkAddBooks,
   deleteUserBook,
   completeOnboarding,
@@ -101,6 +102,23 @@ describe('upsertBookAndUserBook', () => {
   it('throws when the user_books upsert fails', async () => {
     setClient({ tables: { user_books: { error: { message: 'ub fail' } } } })
     await expect(upsertBookAndUserBook('u1', book, 4)).rejects.toMatchObject({ message: 'ub fail' })
+  })
+})
+
+describe('rejectBook', () => {
+  it('resolves when the book caches and the rejection records', async () => {
+    setClient({ default: { error: null } })
+    await expect(rejectBook('u1', book)).resolves.toBeUndefined()
+  })
+
+  it('throws when the books upsert fails', async () => {
+    setClient({ tables: { books: { error: { message: 'book cache fail' } } } })
+    await expect(rejectBook('u1', book)).rejects.toMatchObject({ message: 'book cache fail' })
+  })
+
+  it('throws when the recommendation insert fails', async () => {
+    setClient({ tables: { recommendations: { error: { message: 'reject fail' } } } })
+    await expect(rejectBook('u1', book)).rejects.toMatchObject({ message: 'reject fail' })
   })
 })
 

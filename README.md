@@ -1,12 +1,12 @@
 # Librarian
 
-A personal book recommendation app for two, powered by Claude AI.
+A personal book recommendation app for two, powered by Google Gemini.
 
 ## Stack
 
-- **Frontend**: React + Vite + Tailwind CSS, deployed on Vercel
+- **Frontend**: React + Vite + Tailwind CSS, deployed on GitHub Pages
 - **Backend**: Supabase (PostgreSQL + Auth + Edge Functions)
-- **AI**: Anthropic Claude (via Supabase Edge Function)
+- **AI**: Google Gemini (via the `librarian` Supabase Edge Function)
 - **Book data**: Open Library API (free, no key required)
 
 ---
@@ -64,26 +64,29 @@ npm run dev
 ```bash
 # Install Supabase CLI first: https://supabase.com/docs/guides/cli
 supabase login
-supabase functions deploy recommend --project-ref your-project-ref
+supabase functions deploy librarian --project-ref your-project-ref
 ```
 
-### 8. Enable AI recommendations (when you have an API key)
+(CI also deploys this automatically on every push to `main`.)
 
-In Supabase dashboard → **Edge Functions → recommend → Secrets**, add:
+### 8. Enable AI recommendations
+
+In Supabase dashboard → **Edge Functions → librarian → Secrets**, add:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_API_KEY=...
 ```
 
-That's it. Both Tim and Michelle can use the app without each needing their own key.
+Gemini's free tier is enough for two readers, so both Tim and Michelle share one key.
 
 ---
 
 ## How it works
 
 - **Shelf**: Log books you've read. Search by title/author via Open Library.
-- **Discover**: Claude reads your reading history and suggests books. Use the prompt field to guide it — "Something like Cosmos but more literary", etc.
+- **Discover**: Gemini reads your reading history and lays out rows of suggestions — your best picks, a few stretches, more from authors you love, and "because you loved X" similarity rows.
+- **Librarian**: Chat with the librarian for on-demand recommendations.
 - **Together**: See what your partner has been reading.
 - **Settings**: Update your name. See instructions for adding the API key.
 
-Accepted recommendations go straight to your shelf. Rejected ones are remembered so Claude won't suggest them again.
+Books added from Discover go straight to your shelf. Dismissed ones are remembered so they won't be suggested again.

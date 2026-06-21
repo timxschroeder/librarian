@@ -26,12 +26,41 @@ export interface Profile {
   email: string
   taste_summary: string | null
   taste_axes: TasteAxes | null
+  discover_slate: DiscoverSlate | null
   genres: string[]
   onboarded_at: string | null
   created_at: string
   reading_goal: number | null
   /** Where "Send to Kindle" deliveries go, e.g. tim_a1b2@kindle.com. Null until set. */
   kindle_email: string | null
+}
+
+/**
+ * A single recommended book in the Discover slate, already resolved against Open
+ * Library server-side (so the client just renders it). `id` is the OL work id, used
+ * both as the cover/key and as the `books.id` when the user adds it to their shelf.
+ */
+export interface DiscoverBook {
+  id: string
+  title: string
+  author: string | null
+  cover_url: string | null
+  first_publish_year: number | null
+  /** One warm sentence tying the pick to the reader's taste (or to the seed book). */
+  reasoning: string
+}
+
+/**
+ * The cached Discover slate (migration 010). The librarian writes it from the shelf +
+ * taste portrait; `signature` (bookCount:ratingsSum, same as TasteAxes) lets the client
+ * detect a changed shelf and recompute. `seeds` are the "because you loved X" rows.
+ */
+export interface DiscoverSlate {
+  signature: string
+  updated_at: string
+  best_picks: DiscoverBook[]
+  stretch: DiscoverBook[]
+  seeds: { seed_title: string; books: DiscoverBook[] }[]
 }
 
 /**

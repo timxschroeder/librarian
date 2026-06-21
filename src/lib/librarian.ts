@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { ParsedEntry, SlateBook, TasteAxes } from '../types'
+import type { DiscoverSlate, ParsedEntry, SlateBook, TasteAxes } from '../types'
 
 export async function initializeTastePortrait(
   books: { title: string; author: string }[],
@@ -42,6 +42,20 @@ export async function recomputeTasteProfile(): Promise<TasteAxes> {
   })
   if (error) throw error
   return (data as { taste_axes: TasteAxes }).taste_axes
+}
+
+/**
+ * Recompute the cached Discover slate. The edge function reads the shelf + portrait,
+ * generates the rows (best picks / stretch / "because you loved X"), resolves them
+ * against Open Library, and persists `discover_slate` server-side; it returns the
+ * fresh slate so the caller can render it without re-reading the profile.
+ */
+export async function computeDiscover(): Promise<DiscoverSlate> {
+  const { data, error } = await supabase.functions.invoke('librarian', {
+    body: { mode: 'discover' },
+  })
+  if (error) throw error
+  return (data as { discover_slate: DiscoverSlate }).discover_slate
 }
 
 /**

@@ -32,7 +32,7 @@ serve(async (req) => {
     // Load user context (shelf + taste portrait) from DB
     const [profileRes, shelfRes] = await Promise.all([
       admin.from('profiles').select('name, taste_summary').eq('id', user.id).single(),
-      admin.from('user_books').select('rating, book:books(title, author)').eq('user_id', user.id),
+      admin.from('user_books').select('rating, book_id, book:books(title, author)').eq('user_id', user.id),
     ])
 
     const name = profileRes.data?.name || 'the reader'
@@ -95,13 +95,98 @@ serve(async (req) => {
       return json(JSON.parse(match[0]))
     }
 
+    // ── Discover slate (pre-computed, cached on the profile) ────────────────
+    // Rows for the Discover tab: best picks (sure things), a stretch row, and one
+    // "because you loved X" row per recently-loved book. Resolved against Open
+    // Library here so the client just renders covers. Persisted with the shelf
+    // signature so the client can serve it instantly and recompute when stale.
+    if (mode === 'discover') {
+      const shelf = (shelfRes.data ?? []) as {
+        rating: number | null
+        book_id: string
+        book: { title: string; author: string | null }
+      }[]
+      const totalCount = shelf.length
+      const ratingSum = shelf.reduce((s, b) => s + (b.rating ?? 0), 0)
+      const signature = `${totalCount}:${ratingSum}`
+
+      // Empty shelf — persist an explicit empty slate so the UI shows its empty state.
+      if (totalCount === 0) {
+        const empty = { signature, updated_at: new Date().toISOString(), best_picks: [], stretch: [], seeds: [] }
+        await admin.from('profiles').update({ discover_slate: empty }).eq('id', user.id)
+        return json({ discover_slate: empty })
+      }
+
+      const { ids: rejectedIds, titles: rejectedTitles } = await loadRejected(admin, user.id)
+
+      // Anchor "because you loved X" rows on up to 3 loved books, distinct authors.
+      const seenAuthor = new Set<string>()
+      const seedTitles: string[] = []
+      for (const ub of shelf) {
+        if ((ub.rating ?? 0) >= 4 && ub.book?.title) {
+          const a = (ub.book.author ?? '').toLowerCase()
+          if (a && seenAuthor.has(a)) continue
+          if (a) seenAuthor.add(a)
+          seedTitles.push(ub.book.title)
+          if (seedTitles.length >= 3) break
+        }
+      }
+
+      const seedClause = seedTitles.length
+        ? `\n\nBuild one "seeds" row for EACH of these loved books, using the exact title as seed_title: ${seedTitles.map((t) => `"${t}"`).join(', ')}.`
+        : '\n\nThe reader has no clearly-loved books yet — return an empty "seeds" array.'
+      const rejectClause = rejectedTitles.length
+        ? `\nNever recommend any of these the reader has dismissed: ${rejectedTitles.map((t) => `"${t}"`).join(', ')}.`
+        : ''
+
+      const prompt = `Build a Discover page of book recommendations for ${name}. Respond with ONLY this JSON — no prose before or after:\n{"best_picks":[{"title":"","author":"","reasoning":""}],"stretch":[{"title":"","author":"","reasoning":""}],"seeds":[{"seed_title":"","books":[{"title":"","author":"","reasoning":""}]}]}\n\nbest_picks: 5 books straight down the middle of their taste — sure things they'll reliably love.\nstretch: 5 books just outside their usual lane that still hit their core reading values.\nseeds: for each seed title, 5 books genuinely similar to THAT book.\nreasoning: one warm, specific sentence tied to their taste (for seeds, tie it to the seed book).\nNever recommend a book already on their shelf, and never repeat a book across sections.${seedClause}${rejectClause}`
+
+      const raw = await gemini(system, [{ role: 'user', parts: [{ text: prompt }] }], 0.7, 2048)
+      const match = raw.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('Malformed discover response from model')
+      const parsed = JSON.parse(match[0])
+
+      // Resolve picks against Open Library, dropping anything unresolved, on-shelf,
+      // rejected, or already used in an earlier row (one shared `used` set).
+      const used = new Set<string>([...shelf.map((b) => b.book_id), ...rejectedIds])
+      const resolveRow = async (list: unknown, max: number) => {
+        const resolved = await Promise.all(((list as RawPick[]) ?? []).map(resolveBook))
+        const out: DiscoverBook[] = []
+        for (const b of resolved) {
+          if (!b || used.has(b.id)) continue
+          used.add(b.id)
+          out.push(b)
+          if (out.length >= max) break
+        }
+        return out
+      }
+
+      const best_picks = await resolveRow(parsed.best_picks, 6)
+      const stretch = await resolveRow(parsed.stretch, 6)
+      const seeds: { seed_title: string; books: DiscoverBook[] }[] = []
+      for (const s of (parsed.seeds as { seed_title?: string; books?: unknown }[]) ?? []) {
+        if (!s?.seed_title) continue
+        const books = await resolveRow(s.books, 6)
+        if (books.length) seeds.push({ seed_title: s.seed_title, books })
+      }
+
+      const slate = { signature, updated_at: new Date().toISOString(), best_picks, stretch, seeds }
+      await admin.from('profiles').update({ discover_slate: slate }).eq('id', user.id)
+      return json({ discover_slate: slate })
+    }
+
     // ── Unified librarian turn (default) ────────────────────────────────────
     // One mode: every turn returns a spoken `message` AND a fresh recommendation
     // slate. The librarian leads with books by default; pinned books on the table
     // survive a re-roll. `recommendations: []` only on a pure-conversation turn.
+    // Dismissed (rejected) books are shared with Discover and never resurfaced.
     const table = (body.table ?? []) as SlateBook[]
     const coldStart = !tasteSummary && !shelfLines
-    const prompt = `${tableBlock(table)}The reader says: "${message}"\n\n${converseInstructions(coldStart)}`
+    const { titles: rejectedTitles } = await loadRejected(admin, user.id)
+    const rejectClause = rejectedTitles.length
+      ? `\n\nNever recommend any of these the reader has dismissed: ${rejectedTitles.map((t) => `"${t}"`).join(', ')}.`
+      : ''
+    const prompt = `${tableBlock(table)}The reader says: "${message}"\n\n${converseInstructions(coldStart)}${rejectClause}`
     const msgs = historyToGemini(history)
     msgs.push({ role: 'user', parts: [{ text: prompt }] })
     const raw = await gemini(system, msgs)
@@ -117,6 +202,68 @@ serve(async (req) => {
     return json({ error: String(err) }, 500)
   }
 })
+
+interface RawPick {
+  title?: string
+  author?: string
+  reasoning?: string
+}
+
+interface DiscoverBook {
+  id: string
+  title: string
+  author: string | null
+  cover_url: string | null
+  first_publish_year: number | null
+  reasoning: string
+}
+
+// Read the books the reader has dismissed (rejected recommendations), so neither the
+// Discover slate nor the chat slate resurfaces them. Returns OL ids (to filter resolved
+// picks) and "Title by Author" strings (to tell the model what to avoid).
+async function loadRejected(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<{ ids: Set<string>; titles: string[] }> {
+  const { data } = await admin
+    .from('recommendations')
+    .select('book_id, book:books(title, author)')
+    .eq('user_id', userId)
+    .eq('status', 'rejected')
+  const ids = new Set<string>()
+  const titles: string[] = []
+  for (const r of (data ?? []) as { book_id: string; book: { title: string; author: string | null } | null }[]) {
+    if (r.book_id) ids.add(r.book_id)
+    if (r.book?.title) titles.push(`${r.book.title}${r.book.author ? ` by ${r.book.author}` : ''}`)
+  }
+  return { ids, titles }
+}
+
+// Resolve a model-named title+author to a real Open Library work (id + cover), so the
+// Discover slate stores everything the client needs to render and to add to the shelf.
+// Returns null when there's no confident match — the caller drops it.
+async function resolveBook(rec: RawPick): Promise<DiscoverBook | null> {
+  const q = `${rec.title ?? ''} ${rec.author ?? ''}`.trim()
+  if (!q) return null
+  try {
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const data = await res.json()
+    const doc = data.docs?.[0]
+    if (!doc?.key) return null
+    return {
+      id: (doc.key as string).replace('/works/', ''),
+      title: (doc.title as string) ?? rec.title ?? '',
+      author: (doc.author_name as string[])?.[0] ?? rec.author ?? null,
+      cover_url: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+      first_publish_year: (doc.first_publish_year as number) ?? null,
+      reasoning: rec.reasoning ?? '',
+    }
+  } catch {
+    return null
+  }
+}
 
 function buildSystem(name: string, tasteSummary: string | null, shelfLines: string): string {
   const portrait = tasteSummary

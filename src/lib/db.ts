@@ -56,6 +56,21 @@ export async function upsertBookAndUserBook(
   if (ubErr) throw ubErr
 }
 
+/**
+ * Mark a Discover suggestion as dismissed. Caches the book (so the recommendation row
+ * can reference it) then records a `rejected` recommendation. Both the Discover slate
+ * and the chat recommender read these back and never resurface a dismissed book.
+ */
+export async function rejectBook(userId: string, book: Book): Promise<void> {
+  const { error: bookErr } = await supabase.from('books').upsert(book, { onConflict: 'id' })
+  if (bookErr) throw bookErr
+
+  const { error } = await supabase
+    .from('recommendations')
+    .insert({ user_id: userId, book_id: book.id, status: 'rejected' })
+  if (error) throw error
+}
+
 export async function updateUserBookRating(userBookId: string, rating: number | null): Promise<void> {
   const { error } = await supabase
     .from('user_books')

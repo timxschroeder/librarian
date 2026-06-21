@@ -27,12 +27,12 @@ test.describe('Shelf (authenticated + onboarded)', () => {
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
   })
 
-  test('Discover shows the author-suggestions empty state', async ({ page }) => {
+  test('Discover shows the empty state when the shelf is empty', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'My Shelf' })).toBeVisible()
     await page.getByRole('link', { name: 'Discover' }).click()
     await expect(page.getByRole('heading', { name: 'Discover' })).toBeVisible()
-    await expect(page.getByText(/four stars or higher/i)).toBeVisible()
+    await expect(page.getByText(/picks tuned to your taste/i)).toBeVisible()
   })
 
   test('Chat page renders the conversation with a welcome message', async ({ page }) => {

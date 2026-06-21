@@ -2,16 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserBooks } from '../lib/db'
 import { recomputeTasteProfile } from '../lib/librarian'
+import { shelfSignature } from '../lib/shelf'
 import Bertha from '../components/Bertha'
-import type { TasteAxes, TasteAxis, UserBook } from '../types'
+import type { TasteAxes, TasteAxis } from '../types'
 
 // Below this confidence an axis is shown as an unknown "gap" rather than a position.
 const CONFIDENCE_GAP = 0.25
-
-function shelfSignature(books: UserBook[]): string {
-  const ratingSum = books.reduce((s, b) => s + (b.rating ?? 0), 0)
-  return `${books.length}:${ratingSum}`
-}
 
 const SOURCE_SEGMENTS = [
   { key: 'language', label: 'Language', cls: 'bg-forest-700' },
