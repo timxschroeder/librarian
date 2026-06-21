@@ -95,32 +95,23 @@ serve(async (req) => {
       return json(JSON.parse(match[0]))
     }
 
-    // ── Recommendation slate ────────────────────────────────────────────────
-    if (mode === 'recommend') {
-      const moodLine = message.trim() ? `The reader says: "${message}"\n\n` : ''
-      const prompt = `${moodLine}Recommend exactly 3 books. Respond with ONLY the following JSON — no prose before or after:\n{"intro":"one warm sentence","recommendations":[{"title":"","author":"","type":"comfort","reasoning":"one sentence tied to their specific taste"},{"title":"","author":"","type":"stretch","reasoning":""},{"title":"","author":"","type":"sure_thing","reasoning":""}]}\n\ntype meanings — comfort: a warm safe bet they'll reliably love; stretch: slightly outside their usual but hits their core values; sure_thing: straight down the middle of their taste. Never recommend a book already on their shelf.`
-      const msgs = historyToGemini(history)
-      msgs.push({ role: 'user', parts: [{ text: prompt }] })
-      const raw = await gemini(system, msgs)
-      const match = raw.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error('Malformed recommendation response from model')
-      return json(JSON.parse(match[0]))
-    }
-
-    // ── Conversational chat (default) ───────────────────────────────────────
+    // ── Unified librarian turn (default) ────────────────────────────────────
+    // One mode: every turn returns a spoken `message` AND a fresh recommendation
+    // slate. The librarian leads with books by default; pinned books on the table
+    // survive a re-roll. `recommendations: []` only on a pure-conversation turn.
+    const table = (body.table ?? []) as SlateBook[]
+    const coldStart = !tasteSummary && !shelfLines
+    const prompt = `${tableBlock(table)}The reader says: "${message}"\n\n${converseInstructions(coldStart)}`
     const msgs = historyToGemini(history)
-    msgs.push({ role: 'user', parts: [{ text: message }] })
-    const response = await gemini(system, msgs)
-
-    // Every 10 assistant turns, refresh the taste portrait
-    let taste_summary_update: string | null = null
-    const assistantTurns = history.filter((m: { role: string }) => m.role === 'assistant').length
-    if (assistantTurns > 0 && assistantTurns % 10 === 0 && tasteSummary) {
-      const updatePrompt = `Based on this conversation, write an updated 2–3 sentence taste portrait for ${name} in second person. Current portrait: "${tasteSummary}". Refine it with any new insight from the conversation.`
-      taste_summary_update = await gemini(system, [{ role: 'user', parts: [{ text: updatePrompt }] }])
-    }
-
-    return json({ message: response, taste_summary_update })
+    msgs.push({ role: 'user', parts: [{ text: prompt }] })
+    const raw = await gemini(system, msgs)
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (!match) throw new Error('Malformed librarian response from model')
+    const parsed = asRecord(JSON.parse(match[0]))
+    return json({
+      message: String(parsed.message ?? ''),
+      recommendations: normalizeRecs(parsed.recommendations, table),
+    })
   } catch (err) {
     console.error(err)
     return json({ error: String(err) }, 500)
@@ -142,6 +133,74 @@ function historyToGemini(history: { role: string; content: string }[]) {
     role: m.role === 'user' ? 'user' : 'model',
     parts: [{ text: m.content }],
   }))
+}
+
+interface SlateBook {
+  title: string
+  author: string
+  type: 'comfort' | 'stretch' | 'sure_thing' | null
+  reasoning: string
+  pinned: boolean
+}
+
+function tableBlock(table: SlateBook[]): string {
+  if (!table.length) return ''
+  const lines = table
+    .map((b, i) => `${i + 1}. "${b.title}"${b.author ? ` by ${b.author}` : ''}${b.pinned ? '  [PINNED]' : ''}`)
+    .join('\n')
+  return `BOOKS CURRENTLY ON THE TABLE (the slate you last offered):\n${lines}\n\n`
+}
+
+function converseInstructions(coldStart: boolean): string {
+  const base = `Respond with ONLY this JSON — no prose before or after:
+{"message":"your warm spoken reply, 1–3 sentences","recommendations":[{"title":"","author":"","type":"comfort","reasoning":"one sentence tied to their specific taste","pinned":false}]}
+
+You are a librarian who ALWAYS has books in hand. Rules:
+- By DEFAULT, put 1–3 books on the table that fit what the reader just said. Fewer is honest — don't pad to three when one is the right answer.
+- KEEP every book marked [PINNED] in your recommendations exactly as-is (same title and author, pinned: true). Re-roll only the un-pinned ones around it. If the reader's message clearly points at one book on the table ("more like the second one", "the Clarke one"), set pinned: true on it and refresh the others to match its key.
+- "type" is optional flavour — comfort: a warm safe bet; stretch: just outside their usual but hits their core values; sure_thing: dead-centre of their taste. Use null when no label fits.
+- "reasoning" ties each pick to their specific taste in one sentence.
+- Never recommend a book already on their shelf, and never repeat a book on the table unless it's pinned.
+- A turn may be pure conversation with NO new books (recommendations: []) ONLY when the reader is clearly being reflective or emotional, or when a single question would resolve a real ambiguity about what to recommend. In that case you MUST end "message" with a warm, specific question that teaches you something about their taste — a question is never a dead end. Otherwise, always return books.`
+  if (!coldStart) return base
+  return `${base}\n- IMPORTANT: their shelf is empty and you don't know their taste yet, so you have nothing to recommend from. Return recommendations: [] and ask one warm, specific question about a book they've loved.`
+}
+
+function clampRecType(t: unknown): SlateBook['type'] {
+  return t === 'comfort' || t === 'stretch' || t === 'sure_thing' ? t : null
+}
+
+function sameBook(a: { title: string }, b: { title: string }): boolean {
+  return a.title.trim().toLowerCase() === b.title.trim().toLowerCase()
+}
+
+// Pure-conversation turn (model returned []) → keep it empty; the client leaves the
+// existing sticky table untouched. Otherwise coerce the model's slate and enforce the
+// core invariant: a pinned book is NEVER dropped or silently un-pinned by a re-roll.
+function normalizeRecs(raw: unknown, table: SlateBook[]): SlateBook[] {
+  const arr = Array.isArray(raw) ? raw : []
+  if (arr.length === 0) return []
+
+  const recs: SlateBook[] = arr
+    .map((r) => {
+      const o = asRecord(r)
+      return {
+        title: String(o.title ?? '').trim(),
+        author: String(o.author ?? '').trim(),
+        type: clampRecType(o.type),
+        reasoning: String(o.reasoning ?? '').trim(),
+        pinned: Boolean(o.pinned),
+      }
+    })
+    .filter((r) => r.title)
+
+  for (const r of recs) {
+    if (table.some((t) => t.pinned && sameBook(t, r))) r.pinned = true
+  }
+  for (const t of table) {
+    if (t.pinned && !recs.some((r) => sameBook(r, t))) recs.unshift({ ...t, pinned: true })
+  }
+  return recs.slice(0, 3)
 }
 
 // Coverage caps confidence by how much shelf evidence exists. A small shelf can't

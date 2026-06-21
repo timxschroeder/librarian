@@ -31,7 +31,8 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/shelf" replace />} />
         <Route path="/shelf" element={<Shelf />} />
         <Route path="/discover" element={<Discover />} />
-        <Route path="/librarian" element={<Librarian />} />
+        <Route path="/chat" element={<Librarian />} />
+        <Route path="/librarian" element={<Navigate to="/chat" replace />} />
         <Route path="/taste" element={<Taste />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/shelf" replace />} />

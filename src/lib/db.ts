@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Book, ChatMessage, KindleRequest, Profile, UserBook } from '../types'
+import type { Book, ChatMessage, KindleRequest, Profile, SlateBook, UserBook } from '../types'
 
 // Single home for every Supabase table call. The Supabase JS client never throws —
 // it returns `{ data, error }` — so each function checks `error` and throws once,
@@ -167,10 +167,11 @@ export async function saveChatMessage(
   userId: string,
   role: 'user' | 'assistant',
   content: string,
+  slate: SlateBook[] | null = null,
 ): Promise<void> {
   const { error } = await supabase
     .from('chat_messages')
-    .insert({ user_id: userId, role, content })
+    .insert({ user_id: userId, role, content, slate })
   if (error) throw error
 }
 

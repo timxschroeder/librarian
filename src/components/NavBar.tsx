@@ -36,7 +36,7 @@ const GearIcon = () => (
 const links = [
   { to: '/shelf', label: 'Shelf', Icon: BookIcon },
   { to: '/discover', label: 'Discover', Icon: SparkleIcon },
-  { to: '/librarian', label: 'Librarian', Icon: LibrarianIcon },
+  { to: '/chat', label: 'Chat', Icon: LibrarianIcon },
   { to: '/taste', label: 'Taste', Icon: TasteIcon },
   { to: '/settings', label: 'Settings', Icon: GearIcon },
 ]

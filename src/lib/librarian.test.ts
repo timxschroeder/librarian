@@ -6,7 +6,7 @@ vi.mock('./supabase', () => ({
   supabase: { functions: { invoke: (...args: unknown[]) => invoke(...args) } },
 }))
 
-import { initializeTastePortrait, chat, recommend, recomputeTasteProfile } from './librarian'
+import { initializeTastePortrait, converse, recomputeTasteProfile } from './librarian'
 
 beforeEach(() => {
   invoke.mockReset()
@@ -27,40 +27,36 @@ describe('initializeTastePortrait', () => {
   })
 })
 
-describe('chat', () => {
-  it('returns the reply + taste update', async () => {
-    invoke.mockResolvedValue({ data: { message: 'Hi!', taste_summary_update: null }, error: null })
-    const res = await chat('hello', [])
-    expect(res.message).toBe('Hi!')
+describe('converse', () => {
+  it('returns the reply + slate and forwards the current table', async () => {
+    const table = [{ title: 'Piranesi', author: 'Susanna Clarke', type: null, reasoning: 'dreamlike', pinned: true }]
+    const data = {
+      message: 'Keeping Piranesi pinned.',
+      recommendations: [
+        { title: 'Piranesi', author: 'Susanna Clarke', type: null, reasoning: 'dreamlike', pinned: true },
+        { title: 'The Starless Sea', author: 'Erin Morgenstern', type: 'stretch', reasoning: 'same key', pinned: false },
+      ],
+    }
+    invoke.mockResolvedValue({ data, error: null })
+    const res = await converse('more like the first one', [{ role: 'user', content: 'hi' }], table)
+    expect(res.message).toBe('Keeping Piranesi pinned.')
+    expect(res.recommendations).toHaveLength(2)
+    expect(res.recommendations[0].pinned).toBe(true)
     expect(invoke).toHaveBeenCalledWith('librarian', {
-      body: { mode: 'chat', message: 'hello', history: [] },
+      body: { mode: 'converse', message: 'more like the first one', history: [{ role: 'user', content: 'hi' }], table },
     })
+  })
+
+  it('returns an empty slate on a pure-conversation turn', async () => {
+    invoke.mockResolvedValue({ data: { message: 'What did the ending leave you with?', recommendations: [] }, error: null })
+    const res = await converse('I just finished Piranesi', [], [])
+    expect(res.recommendations).toHaveLength(0)
+    expect(res.message).toContain('?')
   })
 
   it('throws on error', async () => {
     invoke.mockResolvedValue({ data: null, error: { message: 'fail' } })
-    await expect(chat('x', [])).rejects.toMatchObject({ message: 'fail' })
-  })
-})
-
-describe('recommend', () => {
-  it('returns the slate', async () => {
-    const slate = {
-      intro: 'Here you go',
-      recommendations: [{ title: 'B', author: 'C', type: 'comfort', reasoning: 'because' }],
-    }
-    invoke.mockResolvedValue({ data: slate, error: null })
-    const res = await recommend('something light', [])
-    expect(res.recommendations).toHaveLength(1)
-    expect(res.recommendations[0].type).toBe('comfort')
-    expect(invoke).toHaveBeenCalledWith('librarian', {
-      body: { mode: 'recommend', message: 'something light', history: [] },
-    })
-  })
-
-  it('throws on error', async () => {
-    invoke.mockResolvedValue({ data: null, error: { message: 'nope' } })
-    await expect(recommend('x', [])).rejects.toMatchObject({ message: 'nope' })
+    await expect(converse('x', [], [])).rejects.toMatchObject({ message: 'fail' })
   })
 })
 

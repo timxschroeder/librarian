@@ -1,12 +1,5 @@
 import { supabase } from './supabase'
-import type { ParsedEntry, TasteAxes } from '../types'
-
-export interface RecommendationSlate {
-  title: string
-  author: string
-  type: 'comfort' | 'stretch' | 'sure_thing'
-  reasoning: string
-}
+import type { ParsedEntry, SlateBook, TasteAxes } from '../types'
 
 export async function initializeTastePortrait(
   books: { title: string; author: string }[],
@@ -18,15 +11,24 @@ export async function initializeTastePortrait(
   return (data as { taste_summary: string }).taste_summary
 }
 
-export async function chat(
+/**
+ * One unified librarian turn. The librarian always leads with books on the table:
+ * it returns a spoken `message` plus a fresh `recommendations` slate. Pass the
+ * current `table` (each book carrying its `pinned` flag) so pinned picks survive the
+ * re-roll and the reader can refine ("more like the second one"). `recommendations`
+ * comes back empty only on a pure-conversation turn — the client keeps the existing
+ * (sticky) table in that case. See project_librarian_chat.
+ */
+export async function converse(
   message: string,
   history: { role: 'user' | 'assistant'; content: string }[],
-): Promise<{ message: string; taste_summary_update: string | null }> {
+  table: SlateBook[],
+): Promise<{ message: string; recommendations: SlateBook[] }> {
   const { data, error } = await supabase.functions.invoke('librarian', {
-    body: { mode: 'chat', message, history },
+    body: { mode: 'converse', message, history, table },
   })
   if (error) throw error
-  return data as { message: string; taste_summary_update: string | null }
+  return data as { message: string; recommendations: SlateBook[] }
 }
 
 /**
@@ -53,15 +55,4 @@ export async function parseReadingList(text: string): Promise<ParsedEntry[]> {
   })
   if (error) throw error
   return (data as { entries: ParsedEntry[] }).entries ?? []
-}
-
-export async function recommend(
-  message: string,
-  history: { role: 'user' | 'assistant'; content: string }[],
-): Promise<{ intro: string; recommendations: RecommendationSlate[] }> {
-  const { data, error } = await supabase.functions.invoke('librarian', {
-    body: { mode: 'recommend', message, history },
-  })
-  if (error) throw error
-  return data as { intro: string; recommendations: RecommendationSlate[] }
 }

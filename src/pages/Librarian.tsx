@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getChatHistory, saveChatMessage, updateProfile, getUserBooks } from '../lib/db'
-import { chat, recommend, initializeTastePortrait, type RecommendationSlate } from '../lib/librarian'
+import { converse, initializeTastePortrait } from '../lib/librarian'
+import type { SlateBook } from '../types'
 import Bertha from '../components/Bertha'
 
 interface LocalMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  slate?: { intro: string; recommendations: RecommendationSlate[] }
+  /** The slate this assistant turn put on the table. Absent on pure-conversation turns. */
+  slate?: SlateBook[]
 }
 
-const TYPE_LABEL: Record<RecommendationSlate['type'], string> = {
+const TYPE_LABEL: Record<NonNullable<SlateBook['type']>, string> = {
   comfort: 'Comfort read',
   stretch: 'Stretch pick',
   sure_thing: 'Sure thing',
@@ -42,10 +44,17 @@ export default function Librarian() {
     try {
       const history = await getChatHistory(user.id)
       if (history.length > 0) {
-        setMessages(history.map((m) => ({ id: m.id, role: m.role, content: m.content })))
+        setMessages(
+          history.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            slate: m.slate ?? undefined,
+          })),
+        )
       } else {
         const welcomeContent = tasteSummary
-          ? `Welcome back. What are you in the mood for, or is there a book you'd like to talk about?`
+          ? `Welcome back. What are you in the mood for — or shall I put a few books on the table?`
           : `Hello! I'm your personal librarian. Tell me about a book you've loved recently — what made it special to you?`
         setMessages([{ id: 'welcome', role: 'assistant', content: welcomeContent }])
       }
@@ -85,10 +94,27 @@ export default function Librarian() {
     maybeInitialize()
   }, [loadHistory, maybeInitialize])
 
+  // The live "table" is the most recent slate anyone put down. Pure-conversation turns
+  // don't carry a slate, so it stays sticky across them until a re-roll replaces it.
+  const latestSlateMsg = [...messages].reverse().find((m) => m.slate && m.slate.length > 0)
+  const currentTable: SlateBook[] = latestSlateMsg?.slate ?? []
+
   const getHistory = () =>
     messages
-      .filter((m) => m.id !== 'welcome' && !m.slate)
+      .filter((m) => m.id !== 'welcome')
       .map((m) => ({ role: m.role, content: m.content }))
+
+  // Pin/unpin a book on the live table. Local only — the flag rides along on the next
+  // turn's request, so the effect persists through the re-roll without a DB write.
+  function togglePin(messageId: string, index: number) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId && m.slate
+          ? { ...m, slate: m.slate.map((b, i) => (i === index ? { ...b, pinned: !b.pinned } : b)) }
+          : m,
+      ),
+    )
+  }
 
   async function send(messageText: string) {
     if (!user || !messageText.trim() || loading) return
@@ -101,60 +127,22 @@ export default function Librarian() {
 
     try {
       await saveChatMessage(user.id, 'user', text)
-      const history = getHistory()
-      const { message: reply, taste_summary_update } = await chat(text, history)
+      const { message: reply, recommendations } = await converse(text, getHistory(), currentTable)
+      const slate = recommendations.length > 0 ? recommendations : undefined
 
-      const assistantMsg: LocalMessage = { id: crypto.randomUUID(), role: 'assistant', content: reply }
-      setMessages((prev) => [...prev, assistantMsg])
-      await saveChatMessage(user.id, 'assistant', reply)
-
-      if (taste_summary_update) {
-        await updateProfile(user.id, { taste_summary: taste_summary_update })
+      const assistantMsg: LocalMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: reply,
+        slate,
       }
+      setMessages((prev) => [...prev, assistantMsg])
+      await saveChatMessage(user.id, 'assistant', reply, slate ?? null)
     } catch (err) {
       const errMsg: LocalMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: 'Hm. That didn\'t land — try me again?',
-      }
-      setMessages((prev) => [...prev, errMsg])
-      console.error(err)
-    } finally {
-      setLoading(false)
-      inputRef.current?.focus()
-    }
-  }
-
-  async function getRecommendations() {
-    if (!user || loading) return
-    setLoading(true)
-
-    const promptMsg: LocalMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: 'What should I read next?',
-    }
-    setMessages((prev) => [...prev, promptMsg])
-
-    try {
-      await saveChatMessage(user.id, 'user', 'What should I read next?')
-      const history = getHistory()
-      const result = await recommend(input.trim(), history)
-
-      const slateMsg: LocalMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: result.intro,
-        slate: result,
-      }
-      setMessages((prev) => [...prev, slateMsg])
-      await saveChatMessage(user.id, 'assistant', result.intro)
-      setInput('')
-    } catch (err) {
-      const errMsg: LocalMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: 'Hm, the recommendations got away from me. Give me another try?',
       }
       setMessages((prev) => [...prev, errMsg])
       console.error(err)
@@ -174,7 +162,7 @@ export default function Librarian() {
   if (!historyLoaded) {
     return (
       <div className="flex flex-col h-[calc(100vh-56px)] md:h-screen px-5 md:px-8 pt-8 pb-4">
-        <h1 className="font-display text-3xl text-ink mb-6">Your Librarian</h1>
+        <h1 className="font-display text-3xl text-ink mb-6">Chat</h1>
         <div className="flex-1 space-y-4">
           {[1, 2].map((i) => (
             <div key={i} className={`flex ${i === 2 ? 'justify-end' : ''}`}>
@@ -190,7 +178,7 @@ export default function Librarian() {
     <div className="flex flex-col h-[calc(100vh-56px)] md:h-screen">
       {/* Header */}
       <div className="px-5 md:px-8 pt-8 pb-4 border-b border-border flex-shrink-0">
-        <h1 className="font-display text-3xl text-ink">Your Librarian</h1>
+        <h1 className="font-display text-3xl text-ink">Chat</h1>
         {initializing && (
           <p className="text-xs text-muted mt-1 flex items-center gap-1.5">
             <Bertha expression="thinking" size={22} />
@@ -201,46 +189,65 @@ export default function Librarian() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 md:px-8 py-6 space-y-4">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {msg.role === 'assistant' && (
-              <Bertha expression={msg.slate ? 'delighted' : 'happy'} size={32} className="flex-shrink-0 mt-0.5" />
-            )}
-            <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-last' : ''}`}>
-              {/* Message bubble */}
-              <div
-                className={`px-4 py-3 rounded-2xl font-body text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-forest-700 text-white rounded-br-sm'
-                    : 'bg-parchment text-ink rounded-bl-sm'
-                }`}
-              >
-                {msg.content}
-              </div>
-
-              {/* Recommendation slate embedded in assistant message */}
-              {msg.slate && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {msg.slate.recommendations.map((rec, i) => (
-                    <div
-                      key={i}
-                      className="bg-white border border-border rounded-xl p-4 flex flex-col gap-2"
-                    >
-                      <span className="text-[10px] font-body font-semibold uppercase tracking-wider text-forest-700">
-                        {TYPE_LABEL[rec.type]}
-                      </span>
-                      <div>
-                        <p className="font-display text-sm text-ink leading-snug">{rec.title}</p>
-                        {rec.author && <p className="text-xs text-muted mt-0.5">{rec.author}</p>}
-                      </div>
-                      <p className="text-xs text-muted leading-relaxed flex-1">{rec.reasoning}</p>
-                    </div>
-                  ))}
-                </div>
+        {messages.map((msg) => {
+          const isLiveSlate = msg.slate != null && msg.id === latestSlateMsg?.id
+          return (
+            <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {msg.role === 'assistant' && (
+                <Bertha expression={msg.slate ? 'delighted' : 'happy'} size={32} className="flex-shrink-0 mt-0.5" />
               )}
+              <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-last' : ''}`}>
+                {/* Message bubble */}
+                <div
+                  className={`px-4 py-3 rounded-2xl font-body text-sm leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-forest-700 text-white rounded-br-sm'
+                      : 'bg-parchment text-ink rounded-bl-sm'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+
+                {/* Recommendation slate embedded in assistant message */}
+                {msg.slate && msg.slate.length > 0 && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {msg.slate.map((rec, i) => (
+                      <div
+                        key={i}
+                        className={`relative bg-white rounded-xl p-4 flex flex-col gap-2 border ${
+                          rec.pinned ? 'border-forest-700' : 'border-border'
+                        }`}
+                      >
+                        {/* Pin toggle — only interactive on the live (latest) slate */}
+                        <button
+                          onClick={() => isLiveSlate && togglePin(msg.id, i)}
+                          disabled={!isLiveSlate}
+                          aria-label={rec.pinned ? `Unpin ${rec.title}` : `Pin ${rec.title}`}
+                          aria-pressed={rec.pinned}
+                          className={`absolute top-3 right-3 transition-colors ${
+                            rec.pinned ? 'text-forest-700' : 'text-border'
+                          } ${isLiveSlate ? 'hover:text-forest-700 cursor-pointer' : 'cursor-default'}`}
+                        >
+                          <svg viewBox="0 0 24 24" fill={rec.pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <path d="M9 4v6l-2 4v2h10v-2l-2-4V4M12 16v5M8 4h8" />
+                          </svg>
+                        </button>
+                        <span className="text-[10px] font-body font-semibold uppercase tracking-wider text-forest-700 pr-5 min-h-[14px]">
+                          {rec.pinned ? 'Pinned' : rec.type ? TYPE_LABEL[rec.type] : ''}
+                        </span>
+                        <div>
+                          <p className="font-display text-sm text-ink leading-snug">{rec.title}</p>
+                          {rec.author && <p className="text-xs text-muted mt-0.5">{rec.author}</p>}
+                        </div>
+                        <p className="text-xs text-muted leading-relaxed flex-1">{rec.reasoning}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {/* Typing indicator */}
         {loading && (
@@ -266,7 +273,7 @@ export default function Librarian() {
         {/* Quick actions */}
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={getRecommendations}
+            onClick={() => send('What should I read next?')}
             disabled={loading}
             className="text-xs font-body px-3 py-1.5 rounded-full border border-forest-700 text-forest-700 hover:bg-forest-700/10 transition-colors disabled:opacity-40"
           >

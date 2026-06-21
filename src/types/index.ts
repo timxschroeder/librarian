@@ -91,11 +91,31 @@ export interface Recommendation {
   book: Book
 }
 
+/**
+ * One book on the librarian's "table" — the sticky recommendation slate. `pinned`
+ * books survive a re-roll (the librarian keeps them and refreshes the rest around
+ * them). `type` is optional flavour (comfort/stretch/sure_thing) shown as a label
+ * when it fits; null when it doesn't.
+ */
+export interface SlateBook {
+  title: string
+  author: string
+  type: 'comfort' | 'stretch' | 'sure_thing' | null
+  reasoning: string
+  pinned: boolean
+}
+
 export interface ChatMessage {
   id: string
   user_id: string
   role: 'user' | 'assistant'
   content: string
+  /**
+   * The recommendation slate this assistant turn put on the table, if any. Null for
+   * user messages and pure-conversation assistant turns. Persisted so the cards
+   * re-render on refresh; the most recent non-null slate is the live table.
+   */
+  slate: SlateBook[] | null
   created_at: string
 }
 

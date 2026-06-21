@@ -227,6 +227,12 @@ describe('saveChatMessage', () => {
     await expect(saveChatMessage('u1', 'user', 'hi')).resolves.toBeUndefined()
   })
 
+  it('resolves when persisting a recommendation slate', async () => {
+    setClient({ tables: { chat_messages: { error: null } } })
+    const slate = [{ title: 'Piranesi', author: 'Susanna Clarke', type: null, reasoning: 'dreamlike', pinned: true }]
+    await expect(saveChatMessage('u1', 'assistant', 'here you go', slate)).resolves.toBeUndefined()
+  })
+
   it('throws on a Supabase error (no silent failure)', async () => {
     setClient({ tables: { chat_messages: { error: { message: 'denied' } } } })
     await expect(saveChatMessage('u1', 'assistant', 'yo')).rejects.toMatchObject({ message: 'denied' })

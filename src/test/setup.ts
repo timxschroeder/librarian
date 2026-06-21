@@ -24,5 +24,14 @@ if (typeof globalThis.localStorage === 'undefined') {
     })()
 }
 
+// happy-dom doesn't implement crypto.randomUUID, which components use for message ids.
+if (!globalThis.crypto?.randomUUID) {
+  let n = 0
+  Object.defineProperty(globalThis, 'crypto', {
+    value: { ...globalThis.crypto, randomUUID: () => `test-uuid-${++n}` },
+    configurable: true,
+  })
+}
+
 // Unmount React trees between tests so the DOM doesn't leak across cases.
 afterEach(() => cleanup())

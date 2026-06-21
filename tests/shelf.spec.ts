@@ -23,7 +23,7 @@ test.describe('Shelf (authenticated + onboarded)', () => {
     // Desktop sidebar links (NavLink renders as <a>)
     await expect(page.getByRole('link', { name: 'Shelf' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Discover' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Librarian' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Chat' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
   })
 
@@ -35,11 +35,11 @@ test.describe('Shelf (authenticated + onboarded)', () => {
     await expect(page.getByText(/four stars or higher/i)).toBeVisible()
   })
 
-  test('Librarian page renders the chat with a welcome message', async ({ page }) => {
+  test('Chat page renders the conversation with a welcome message', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'My Shelf' })).toBeVisible()
-    await page.getByRole('link', { name: 'Librarian' }).click()
-    await expect(page.getByRole('heading', { name: 'Your Librarian' })).toBeVisible()
+    await page.getByRole('link', { name: 'Chat' }).click()
+    await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible()
     await expect(page.getByText(/I'm your personal librarian/i)).toBeVisible()
   })
 })
