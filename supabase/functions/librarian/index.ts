@@ -3,6 +3,7 @@
 // not by this repo's tsc (root tsconfig only includes src/).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveBook, type DiscoverBook, type RawPick } from './resolve.ts'
 
 const GEMINI_MODEL = 'gemini-2.5-flash'
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
@@ -247,21 +248,6 @@ serve(async (req) => {
   }
 })
 
-interface RawPick {
-  title?: string
-  author?: string
-  reasoning?: string
-}
-
-interface DiscoverBook {
-  id: string
-  title: string
-  author: string | null
-  cover_url: string | null
-  first_publish_year: number | null
-  reasoning: string
-}
-
 // Read the books the reader has dismissed (rejected recommendations), so neither the
 // Discover slate nor the chat slate resurfaces them. Returns OL ids (to filter resolved
 // picks) and "Title by Author" strings (to tell the model what to avoid).
@@ -281,32 +267,6 @@ async function loadRejected(
     if (r.book?.title) titles.push(`${r.book.title}${r.book.author ? ` by ${r.book.author}` : ''}`)
   }
   return { ids, titles }
-}
-
-// Resolve a model-named title+author to a real Open Library work (id + cover), so the
-// Discover slate stores everything the client needs to render and to add to the shelf.
-// Returns null when there's no confident match — the caller drops it.
-async function resolveBook(rec: RawPick): Promise<DiscoverBook | null> {
-  const q = `${rec.title ?? ''} ${rec.author ?? ''}`.trim()
-  if (!q) return null
-  try {
-    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const data = await res.json()
-    const doc = data.docs?.[0]
-    if (!doc?.key) return null
-    return {
-      id: (doc.key as string).replace('/works/', ''),
-      title: (doc.title as string) ?? rec.title ?? '',
-      author: (doc.author_name as string[])?.[0] ?? rec.author ?? null,
-      cover_url: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
-      first_publish_year: (doc.first_publish_year as number) ?? null,
-      reasoning: rec.reasoning ?? '',
-    }
-  } catch {
-    return null
-  }
 }
 
 function buildSystem(name: string, tasteSummary: string | null, shelfLines: string): string {
