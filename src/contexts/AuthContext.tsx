@@ -102,6 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Co-located with the provider on purpose: the component tests mock this whole module
+// (`vi.mock('../contexts/AuthContext')`) to supply `useAuth`, so splitting it into its
+// own file to satisfy react-refresh would break every mock for no runtime benefit.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')

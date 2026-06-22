@@ -1,3 +1,6 @@
+// @ts-nocheck — Deno edge function: uses the Deno global and remote/esm imports that the
+// Node-based TS server in the editor can't resolve. Type-checked by Deno at deploy time,
+// not by this repo's tsc (root tsconfig only includes src/).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 

@@ -40,4 +40,15 @@ export default tseslint.config(
       globals: { ...globals.node, ...globals.browser },
     },
   },
+
+  // Supabase edge functions run on Deno, not Node. The editor's Node TS server can't
+  // resolve their remote/esm imports or the `Deno` global, so each file carries a
+  // `@ts-nocheck` (Deno type-checks them at deploy instead). Permit that one directive
+  // here — it stays banned everywhere else.
+  {
+    files: ['supabase/functions/**/*.ts'],
+    rules: {
+      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-nocheck': false }],
+    },
+  },
 )
