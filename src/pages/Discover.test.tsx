@@ -98,6 +98,26 @@ describe('Discover', () => {
     expect(await screen.findByText('My best picks')).toBeInTheDocument()
   })
 
+  it('shows the empty state only when the shelf is truly empty', async () => {
+    getUserBooks.mockResolvedValue([])
+    profile = { discover_slate: null }
+    render(<Discover />)
+
+    expect(await screen.findByText(/Rate a few books on your shelf/)).toBeInTheDocument()
+    await waitFor(() => expect(computeDiscover).not.toHaveBeenCalled())
+  })
+
+  it('compute failure with books shows a retry, not the empty state', async () => {
+    profile = { discover_slate: null }
+    computeDiscover.mockRejectedValue(new Error('boom'))
+    render(<Discover />)
+
+    expect(await screen.findByText(/Couldn't load your picks/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    // Must NOT misleadingly tell a reader with a full shelf to rate more books.
+    expect(screen.queryByText(/Rate a few books on your shelf/)).not.toBeInTheDocument()
+  })
+
   it('dismisses a pick: calls rejectBook and removes the card', async () => {
     const user = userEvent.setup()
     render(<Discover />)

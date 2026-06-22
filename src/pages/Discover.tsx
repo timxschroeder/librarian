@@ -57,7 +57,11 @@ export default function Discover() {
   const [authorRow, setAuthorRow] = useState<DiscoverBook[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [shelfEmpty, setShelfEmpty] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The LLM slate couldn't be (re)computed. Soft failure: we still show the
+  // client-side author row, so the page never goes blank because of it.
+  const [computeFailed, setComputeFailed] = useState(false)
   const [shelfIds, setShelfIds] = useState<Set<string>>(new Set())
   const [added, setAdded] = useState<Set<string>>(new Set())
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
@@ -116,6 +120,7 @@ export default function Discover() {
   const load = useCallback(async () => {
     if (!user) return
     setError(null)
+    setComputeFailed(false)
     try {
       const userBooks = await getUserBooks(user.id)
       const onShelf = new Set(userBooks.map((ub) => ub.book_id))
@@ -124,37 +129,49 @@ export default function Discover() {
       // Nothing on the shelf yet — nothing to recommend from. Show the empty state
       // without burning a compute (or an edge-function round trip).
       if (userBooks.length === 0) {
+        setShelfEmpty(true)
+        setLoading(false)
+        return
+      }
+      setShelfEmpty(false)
+
+      const sig = shelfSignature(userBooks)
+      const cached = profile?.discover_slate ?? null
+      if (cached) setSlate(cached)
+
+      // The author row is mined client-side from Open Library — it doesn't depend on
+      // the LLM compute, so load it in parallel and clear the skeleton as soon as it
+      // (or a cached slate) gives us something to render. This is what keeps Discover
+      // from going blank when the slate compute is slow or fails.
+      const authorDone = loadAuthorRow(userBooks, onShelf)
+        .catch((e) => console.error('Discover author row failed', e))
+        .finally(() => setLoading(false))
+
+      // Cached slate is current — nothing to recompute.
+      if (cached && cached.signature === sig) {
         setLoading(false)
         return
       }
 
-      const sig = shelfSignature(userBooks)
-
-      // Serve the cached slate instantly, then recompute in the background if the
-      // shelf has changed since it was built.
-      const cached = profile?.discover_slate ?? null
-      if (cached) {
-        setSlate(cached)
-        setLoading(false)
-      }
-
-      void loadAuthorRow(userBooks, onShelf)
-
-      if (!cached || cached.signature !== sig) {
-        if (cached) setRefreshing(true)
+      // Recompute the slate. Keep any cached slate + the author row on screen while
+      // it runs; if it fails, fall back to the author row rather than blanking.
+      if (cached) setRefreshing(true)
+      try {
         const fresh = await computeDiscover()
         setSlate(fresh)
         await refreshProfile()
+      } catch (e) {
+        console.error('Discover compute failed', e)
+        setComputeFailed(true)
+        await authorDone
+      } finally {
+        setRefreshing(false)
+        setLoading(false)
       }
     } catch (err) {
       console.error('Discover load failed', err)
-      setSlate((prev) => {
-        if (!prev) setError('Could not load suggestions. Please try again.')
-        return prev
-      })
-    } finally {
+      setError('Could not load suggestions. Please try again.')
       setLoading(false)
-      setRefreshing(false)
     }
   }, [user, profile, refreshProfile, loadAuthorRow])
 
@@ -214,9 +231,33 @@ export default function Discover() {
   }
   const visibleRows = rows.filter((r) => r.books.some((b) => !dismissed.has(b.id)))
 
-  // ── Empty / loading / error states ──────────────────────────────────────
+  const retry = () => {
+    ranRef.current = false
+    setLoading(true)
+    load()
+  }
 
-  if (loading) {
+  // ── States, in priority order ─────────────────────────────────────────────
+  // Render rows whenever we have any (even mid-refresh, even if the slate compute
+  // failed and only the author row survived). Only fall back to skeleton/empty/error
+  // when there's genuinely nothing to show — so the page never blanks on a hiccup.
+
+  // Genuinely empty shelf — nothing to recommend from yet.
+  if (shelfEmpty) {
+    return (
+      <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4 flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <Bertha expression="reading" size={96} className="mb-4" />
+        <h1 className="font-display text-3xl text-ink mb-2">Discover</h1>
+        <p className="text-muted text-sm leading-relaxed max-w-xs">
+          Rate a few books on your shelf and I'll lay out picks tuned to your taste — your best bets, a few
+          stretches, and books like the ones you've loved.
+        </p>
+      </div>
+    )
+  }
+
+  // Still working and nothing to show yet.
+  if (visibleRows.length === 0 && (loading || refreshing)) {
     return (
       <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4">
         <h1 className="font-display text-3xl text-ink mb-1">Discover</h1>
@@ -237,35 +278,20 @@ export default function Discover() {
     )
   }
 
-  if (error && !slate) {
+  // Settled with nothing to show — a real failure (data load or compute with no
+  // author row to fall back on). Offer a retry rather than a misleading "rate more".
+  if (visibleRows.length === 0) {
     return (
       <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4 flex flex-col items-center justify-center min-h-[60vh] text-center">
         <Bertha expression="oops" size={84} className="mb-3" />
-        <p className="font-display text-xl text-ink mb-2">Something went wrong</p>
-        <p className="text-muted text-sm mb-6">{error}</p>
+        <p className="font-display text-xl text-ink mb-2">Couldn't load your picks</p>
+        <p className="text-muted text-sm mb-6">{error ?? 'Something got in the way. Give it another try.'}</p>
         <button
-          onClick={() => {
-            ranRef.current = false
-            setLoading(true)
-            load()
-          }}
+          onClick={retry}
           className="bg-forest-700 text-white px-5 py-2.5 rounded-full text-sm font-body font-medium hover:bg-forest-900 transition-colors"
         >
           Try again
         </button>
-      </div>
-    )
-  }
-
-  if (visibleRows.length === 0) {
-    return (
-      <div className="px-5 md:px-8 pt-8 md:pt-10 pb-4 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <Bertha expression="reading" size={96} className="mb-4" />
-        <h1 className="font-display text-3xl text-ink mb-2">Discover</h1>
-        <p className="text-muted text-sm leading-relaxed max-w-xs">
-          Rate a few books on your shelf and I'll lay out picks tuned to your taste — your best bets, a few
-          stretches, and books like the ones you've loved.
-        </p>
       </div>
     )
   }
@@ -279,16 +305,28 @@ export default function Discover() {
           <h1 className="font-display text-3xl text-ink mb-1">Discover</h1>
           <p className="text-muted text-sm">Picks from your taste — refreshed as your shelf grows</p>
         </div>
-        <span className="mt-1.5 inline-flex items-center gap-1.5 bg-parchment text-muted text-xs px-3 py-1.5 rounded-full whitespace-nowrap">
-          {refreshing ? (
-            <>
-              <span className="w-3 h-3 border-2 border-muted border-t-transparent rounded-full animate-spin" />
-              Finding fresh picks…
-            </>
-          ) : (
-            slate && <>Updated {timeAgo(slate.updated_at)}</>
-          )}
-        </span>
+        {refreshing ? (
+          <span className="mt-1.5 inline-flex items-center gap-1.5 bg-parchment text-muted text-xs px-3 py-1.5 rounded-full whitespace-nowrap">
+            <span className="w-3 h-3 border-2 border-muted border-t-transparent rounded-full animate-spin" />
+            Finding fresh picks…
+          </span>
+        ) : computeFailed ? (
+          <button
+            onClick={retry}
+            className="mt-1.5 inline-flex items-center gap-1.5 bg-parchment text-muted text-xs px-3 py-1.5 rounded-full whitespace-nowrap hover:text-ink transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5" />
+            </svg>
+            Couldn't refresh picks — retry
+          </button>
+        ) : (
+          slate && (
+            <span className="mt-1.5 inline-flex items-center gap-1.5 bg-parchment text-muted text-xs px-3 py-1.5 rounded-full whitespace-nowrap">
+              Updated {timeAgo(slate.updated_at)}
+            </span>
+          )
+        )}
       </div>
 
       <div className="space-y-9">

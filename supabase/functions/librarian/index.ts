@@ -141,7 +141,10 @@ serve(async (req) => {
 
       const prompt = `Build a Discover page of book recommendations for ${name}. Respond with ONLY this JSON — no prose before or after:\n{"best_picks":[{"title":"","author":"","reasoning":""}],"stretch":[{"title":"","author":"","reasoning":""}],"seeds":[{"seed_title":"","books":[{"title":"","author":"","reasoning":""}]}]}\n\nbest_picks: 5 books straight down the middle of their taste — sure things they'll reliably love.\nstretch: 5 books just outside their usual lane that still hit their core reading values.\nseeds: for each seed title, 5 books genuinely similar to THAT book.\nreasoning: one warm, specific sentence tied to their taste (for seeds, tie it to the seed book).\nNever recommend a book already on their shelf, and never repeat a book across sections.${seedClause}${rejectClause}`
 
-      const raw = await gemini(system, [{ role: 'user', parts: [{ text: prompt }] }], 0.7, 2048)
+      // 4096 tokens: the slate asks for ~25 books with reasoning, which runs ~1900
+      // tokens — too close to a 2048 cap, where any overflow truncates the JSON and
+      // the parse below throws. The extra headroom keeps the response whole.
+      const raw = await gemini(system, [{ role: 'user', parts: [{ text: prompt }] }], 0.7, 4096)
       const match = raw.match(/\{[\s\S]*\}/)
       if (!match) throw new Error('Malformed discover response from model')
       const parsed = JSON.parse(match[0])
