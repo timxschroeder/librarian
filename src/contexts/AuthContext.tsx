@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { getProfile } from '../lib/db'
+import { recomputeTaste } from '../lib/librarian'
 import type { Profile } from '../types'
 
 interface AuthContextValue {
@@ -11,6 +12,13 @@ interface AuthContextValue {
   loading: boolean
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  /**
+   * Debounced, fire-and-forget request to recompute the taste profile (portrait +
+   * axes). Call after any change that affects taste — a book added/rated/removed, or
+   * a chat turn. Rapid bursts coalesce into one server call, and the edge function
+   * no-ops cheaply when nothing actually changed, so it's safe to call liberally.
+   */
+  scheduleTasteRefresh: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -34,6 +42,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function refreshProfile() {
     if (user) await fetchProfile(user.id)
+  }
+
+  // Debounce timer for taste recomputes. A burst of mutations (e.g. a bulk import
+  // adding many books) collapses into a single recompute once the burst settles.
+  const tasteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function scheduleTasteRefresh() {
+    if (tasteTimer.current) clearTimeout(tasteTimer.current)
+    tasteTimer.current = setTimeout(() => {
+      tasteTimer.current = null
+      recomputeTaste()
+        .then(({ taste_summary, taste_axes }) => {
+          // Merge the freshly computed fields into the in-context profile so the
+          // Taste tab and chat see them without an extra round-trip.
+          setProfile((prev) => (prev ? { ...prev, taste_summary, taste_axes } : prev))
+        })
+        .catch((err) => {
+          // Non-fatal: the app works without an up-to-date taste profile, and the
+          // Taste tab will retry on its next visit.
+          console.error('Taste refresh failed', err)
+        })
+    }, 4000)
   }
 
   useEffect(() => {
@@ -66,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, signOut, refreshProfile, scheduleTasteRefresh }}>
       {children}
     </AuthContext.Provider>
   )

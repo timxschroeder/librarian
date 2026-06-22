@@ -24,7 +24,7 @@ vi.mock('../lib/librarian', () => ({
 const mockUser = { id: 'u1' }
 let profile: Partial<Profile> | null
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: mockUser, profile }),
+  useAuth: () => ({ user: mockUser, profile, scheduleTasteRefresh: vi.fn() }),
 }))
 
 import Shelf from './Shelf'

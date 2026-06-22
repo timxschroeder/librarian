@@ -18,7 +18,7 @@ vi.mock('../lib/db', () => ({
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1' } }),
+  useAuth: () => ({ user: { id: 'u1' }, scheduleTasteRefresh: vi.fn() }),
 }))
 
 import BulkImportModal from './BulkImportModal'

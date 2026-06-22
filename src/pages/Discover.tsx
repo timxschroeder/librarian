@@ -51,7 +51,7 @@ function toBookRecord(b: DiscoverBook): Book {
 }
 
 export default function Discover() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile, scheduleTasteRefresh } = useAuth()
   const [slate, setSlate] = useState<DiscoverSlate | null>(null)
   // "More from authors you love" — mined client-side from Open Library, not the LLM.
   const [authorRow, setAuthorRow] = useState<DiscoverBook[]>([])
@@ -186,6 +186,7 @@ export default function Discover() {
     setActing(b.id)
     try {
       await upsertBookAndUserBook(user.id, toBookRecord(b), 0)
+      scheduleTasteRefresh()
       setAdded((prev) => new Set(prev).add(b.id))
       setShelfIds((prev) => new Set(prev).add(b.id))
     } catch (err) {

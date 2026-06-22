@@ -5,28 +5,24 @@ import type { SlateBook } from '../types'
 
 const getChatHistory = vi.fn()
 const saveChatMessage = vi.fn()
-const updateProfile = vi.fn()
-const getUserBooks = vi.fn()
 vi.mock('../lib/db', () => ({
   getChatHistory: (...a: unknown[]) => getChatHistory(...a),
   saveChatMessage: (...a: unknown[]) => saveChatMessage(...a),
-  updateProfile: (...a: unknown[]) => updateProfile(...a),
-  getUserBooks: (...a: unknown[]) => getUserBooks(...a),
 }))
 
 const converse = vi.fn()
 vi.mock('../lib/librarian', () => ({
   converse: (...a: unknown[]) => converse(...a),
-  initializeTastePortrait: vi.fn(),
 }))
 
-// A STABLE auth object — returning a fresh refreshProfile each call would change
-// maybeInitialize's identity every render, re-fire the load effect, and wipe messages.
+// A STABLE auth object — returning fresh callbacks each call would change the load
+// effect's identity every render, re-fire it, and wipe messages.
+const scheduleTasteRefresh = vi.fn()
 const auth = {
   user: { id: 'u1' },
-  // taste_summary present → maybeInitialize() short-circuits, no shelf fetch needed.
   profile: { taste_summary: 'You love voice.' },
   refreshProfile: vi.fn(),
+  scheduleTasteRefresh,
 }
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }))
 
@@ -43,9 +39,8 @@ const book = (title: string, pinned = false): SlateBook => ({
 beforeEach(() => {
   getChatHistory.mockReset().mockResolvedValue([])
   saveChatMessage.mockReset().mockResolvedValue(undefined)
-  updateProfile.mockReset().mockResolvedValue(undefined)
-  getUserBooks.mockReset().mockResolvedValue([])
   converse.mockReset()
+  scheduleTasteRefresh.mockReset()
 })
 
 async function sendMessage(user: ReturnType<typeof userEvent.setup>, text: string) {
@@ -72,6 +67,8 @@ describe('Librarian (Chat)', () => {
     expect(saveChatMessage).toHaveBeenCalledWith(
       'u1', 'assistant', 'Three to weigh.', expect.arrayContaining([expect.objectContaining({ title: 'Piranesi' })]),
     )
+    // Conversation feeds taste: each completed turn nudges a (debounced) recompute.
+    await waitFor(() => expect(scheduleTasteRefresh).toHaveBeenCalled())
   })
 
   it('keeps the table sticky through a pure-conversation turn', async () => {

@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default function AddBookModal({ onClose, onAdded }: Props) {
-  const { user } = useAuth()
+  const { user, scheduleTasteRefresh } = useAuth()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<OpenLibrarySearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -41,6 +41,7 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
     try {
       const enriched = await enrichBook(toBook(result))
       await upsertBookAndUserBook(user.id, enriched, rating)
+      scheduleTasteRefresh()
       onAdded()
       onClose()
     } catch (err: unknown) {

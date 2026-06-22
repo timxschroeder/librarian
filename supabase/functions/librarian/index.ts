@@ -4,6 +4,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const GEMINI_MODEL = 'gemini-2.5-flash'
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
+// Conversation is part of taste, but we don't want to re-run the model on every chat
+// turn. Bucketing the total chat-message count means the taste profile re-runs once
+// per this many messages — folded into the recompute signature alongside the shelf.
+const CHAT_BUCKET_SIZE = 6
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -27,16 +32,17 @@ serve(async (req) => {
     }
 
     const body = await req.json()
-    const { mode, message = '', history = [], books: initBooks = [] } = body
+    const { mode, message = '', history = [] } = body
 
     // Load user context (shelf + taste portrait) from DB
     const [profileRes, shelfRes] = await Promise.all([
-      admin.from('profiles').select('name, taste_summary').eq('id', user.id).single(),
+      admin.from('profiles').select('name, taste_summary, taste_axes').eq('id', user.id).single(),
       admin.from('user_books').select('rating, book_id, book:books(title, author)').eq('user_id', user.id),
     ])
 
     const name = profileRes.data?.name || 'the reader'
     const tasteSummary: string | null = profileRes.data?.taste_summary ?? null
+    const cachedAxes = (profileRes.data?.taste_axes ?? null) as { signature?: string } | null
     const shelfLines = (shelfRes.data ?? [])
       .map((ub: { rating: number | null; book: { title: string; author: string | null } }) => {
         const stars = ub.rating ? `★${ub.rating}` : 'unrated'
@@ -46,42 +52,74 @@ serve(async (req) => {
 
     const system = buildSystem(name, tasteSummary, shelfLines)
 
-    // ── Initialize taste portrait from loved books ──────────────────────────
-    if (mode === 'initialize') {
-      const bookList = (initBooks as { title: string; author: string }[])
-        .map((b) => `- "${b.title}" by ${b.author}`)
-        .join('\n')
-      const prompt = `${name} just told me the following books are among their all-time favourites:\n${bookList}\n\nWrite a 2–3 sentence taste portrait in second person ("You…") capturing what their love of these books reveals about their reading values — what they seek in prose, story, character, and ideas. Be specific and insightful, not generic.`
-      const portrait = await gemini(system, [{ role: 'user', parts: [{ text: prompt }] }])
-      return json({ taste_summary: portrait })
-    }
-
-    // ── Structured taste axes (the legible layer) ───────────────────────────
-    if (mode === 'profile') {
+    // ── Unified taste recompute: portrait + axes in one pass ────────────────
+    // The single writer of the taste profile. Both the prose `taste_summary` and the
+    // structured `taste_axes` are rewritten together from shelf + current portrait +
+    // recent conversation, so they never drift apart. Guarded by a signature
+    // (shelf state + chat bucket): if nothing changed we return the cached profile
+    // without calling Gemini, so the client can trigger this freely after any
+    // mutation or chat turn. See the taste-recompute design + project memory.
+    if (mode === 'recompute') {
+      const force = Boolean(body.force)
       const shelf = (shelfRes.data ?? []) as {
         rating: number | null
         book: { title: string; author: string | null }
       }[]
       const totalCount = shelf.length
       const ratingSum = shelf.reduce((s, b) => s + (b.rating ?? 0), 0)
-      const signature = `${totalCount}:${ratingSum}`
 
-      // Nothing on the shelf to infer from — persist an explicit empty profile so
-      // the UI shows the "still reading you in" state instead of spinning.
-      if (totalCount === 0) {
-        const empty = emptyAxes(signature)
-        await admin.from('profiles').update({ taste_axes: empty }).eq('id', user.id)
-        return json({ taste_axes: empty })
+      const { count: chatCount } = await admin
+        .from('chat_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+      const chatBucket = Math.floor((chatCount ?? 0) / CHAT_BUCKET_SIZE)
+      const signature = `${totalCount}:${ratingSum}:${chatBucket}`
+
+      // Nothing changed since the last compute (and we already have a portrait) →
+      // serve the cache, no model call. This is what makes redundant triggers cheap.
+      if (!force && tasteSummary && cachedAxes?.signature === signature) {
+        return json({ taste_summary: tasteSummary, taste_axes: cachedAxes })
       }
 
-      const prompt = `Analyze ${name}'s reading taste from their shelf and portrait above, and place them on a fixed set of taste axes. Judge how they like to READ, not genre.\n\nRespond with ONLY this JSON — no prose before or after:\n{"source_of_reward":{"language":0.0,"story":0.0,"character":0.0,"ideas":0.0},"weight":{"value":0.0,"confidence":0.0},"propulsion":{"value":0.0,"confidence":0.0},"darkness":{"value":0.0,"confidence":0.0},"tone":{"value":0.0,"confidence":0.0}}\n\nsource_of_reward: four shares in 0..1 that SUM TO 1 — what they read FOR. language = the sentences themselves; story = plot/what happens; character = inner life of who it happens to; ideas = concepts/argument.\nThe four bipolar axes take value in -1..1 — weight: -1 effortless .. +1 demanding; propulsion: -1 slow burn .. +1 page-turner; darkness: -1 warm .. +1 bleak; tone: -1 earnest .. +1 playful.\nconfidence is YOUR certainty 0..1 for that axis given how much the shelf actually reveals about it. If the shelf gives little basis for an axis, set a LOW confidence and a near-0 value — do not guess.`
+      // Nothing on the shelf to infer axes from — persist an explicit empty profile so
+      // the UI shows the "still reading you in" state instead of spinning. Leave any
+      // existing portrait untouched.
+      if (totalCount === 0) {
+        const empty = emptyAxes(signature)
+        const { error } = await admin.from('profiles').update({ taste_axes: empty }).eq('id', user.id)
+        if (error) throw error
+        return json({ taste_summary: tasteSummary, taste_axes: empty })
+      }
 
-      const raw = await gemini(system, [{ role: 'user', parts: [{ text: prompt }] }], 0.2)
+      // Recent transcript so conversation moves both the portrait and the axes.
+      const { data: chatRows } = await admin
+        .from('chat_messages')
+        .select('role, content')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      const transcript = (chatRows ?? [])
+        .reverse()
+        .map((m: { role: string; content: string }) => `${m.role === 'user' ? name : 'Librarian'}: ${m.content}`)
+        .join('\n')
+
+      const prompt = `Analyze ${name}'s reading taste from their shelf and current portrait above${transcript ? ', and their recent conversation below' : ''}. Produce a refreshed portrait AND place them on a fixed set of taste axes. Judge how they like to READ, not genre.\n\nRespond with ONLY this JSON — no prose before or after:\n{"portrait":"","axes":{"source_of_reward":{"language":0.0,"story":0.0,"character":0.0,"ideas":0.0},"weight":{"value":0.0,"confidence":0.0},"propulsion":{"value":0.0,"confidence":0.0},"darkness":{"value":0.0,"confidence":0.0},"tone":{"value":0.0,"confidence":0.0}}}\n\nportrait: a warm, specific 2–3 sentence taste portrait in second person ("You…") capturing what they seek in prose, story, character, and ideas. Refine the current portrait with any new signal from the shelf and conversation; be insightful, not generic.\naxes.source_of_reward: four shares in 0..1 that SUM TO 1 — what they read FOR. language = the sentences themselves; story = plot/what happens; character = inner life of who it happens to; ideas = concepts/argument.\nThe four bipolar axes take value in -1..1 — weight: -1 effortless .. +1 demanding; propulsion: -1 slow burn .. +1 page-turner; darkness: -1 warm .. +1 bleak; tone: -1 earnest .. +1 playful.\nconfidence is YOUR certainty 0..1 for that axis given how much the evidence reveals about it. If there's little basis for an axis, set a LOW confidence and a near-0 value — do not guess.${transcript ? `\n\nRECENT CONVERSATION:\n${transcript}` : ''}`
+
+      const raw = await gemini(system, [{ role: 'user', parts: [{ text: prompt }] }], 0.3, 1536)
       const match = raw.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error('Malformed taste profile response from model')
-      const axes = normalizeAxes(JSON.parse(match[0]), totalCount, signature)
-      await admin.from('profiles').update({ taste_axes: axes }).eq('id', user.id)
-      return json({ taste_axes: axes })
+      if (!match) throw new Error('Malformed taste recompute response from model')
+      const parsed = asRecord(JSON.parse(match[0]))
+      const axes = normalizeAxes(parsed.axes, totalCount, signature)
+      const portrait = typeof parsed.portrait === 'string' && parsed.portrait.trim()
+        ? parsed.portrait.trim()
+        : tasteSummary
+
+      const { error } = await admin
+        .from('profiles')
+        .update({ taste_axes: axes, taste_summary: portrait })
+        .eq('id', user.id)
+      if (error) throw error
+      return json({ taste_summary: portrait, taste_axes: axes })
     }
 
     // ── Parse a pasted reading list into candidate books ────────────────────

@@ -1,14 +1,22 @@
 import { supabase } from './supabase'
 import type { DiscoverSlate, ParsedEntry, SlateBook, TasteAxes } from '../types'
 
-export async function initializeTastePortrait(
-  books: { title: string; author: string }[],
-): Promise<string> {
+/**
+ * Recompute the whole taste profile — prose portrait AND structured 5-axis model —
+ * in one server pass. The edge function reads the shelf, the current portrait, and
+ * recent conversation, rewrites both together, and persists them on the profile,
+ * returning the fresh values. It's signature-guarded server-side: when nothing has
+ * changed it returns the cache without calling the model, so callers can trigger it
+ * freely after any book mutation or chat turn. Pass `force` to bypass the guard.
+ */
+export async function recomputeTaste(
+  opts: { force?: boolean } = {},
+): Promise<{ taste_summary: string | null; taste_axes: TasteAxes }> {
   const { data, error } = await supabase.functions.invoke('librarian', {
-    body: { mode: 'initialize', books },
+    body: { mode: 'recompute', force: opts.force ?? false },
   })
   if (error) throw error
-  return (data as { taste_summary: string }).taste_summary
+  return data as { taste_summary: string | null; taste_axes: TasteAxes }
 }
 
 /**
@@ -29,19 +37,6 @@ export async function converse(
   })
   if (error) throw error
   return data as { message: string; recommendations: SlateBook[] }
-}
-
-/**
- * Recompute the structured 5-axis taste profile. The edge function reads the
- * user's shelf + portrait, projects them onto the axes, and persists `taste_axes`
- * server-side; it also returns the fresh axes so the caller can update the UI.
- */
-export async function recomputeTasteProfile(): Promise<TasteAxes> {
-  const { data, error } = await supabase.functions.invoke('librarian', {
-    body: { mode: 'profile' },
-  })
-  if (error) throw error
-  return (data as { taste_axes: TasteAxes }).taste_axes
 }
 
 /**

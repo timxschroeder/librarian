@@ -37,7 +37,7 @@ function BookCover({ book }: { book: CuratedBook }) {
 }
 
 export default function Onboarding() {
-  const { user, refreshProfile } = useAuth()
+  const { user, refreshProfile, scheduleTasteRefresh } = useAuth()
   const [step, setStep] = useState<1 | 2>(1)
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set())
   const [selectedBooks, setSelectedBooks] = useState<Map<string, number>>(new Map())
@@ -118,6 +118,8 @@ export default function Onboarding() {
       })
 
       await completeOnboarding(user.id, [...selectedGenres], books)
+      // Seed the taste profile (portrait + axes) from the books just added.
+      scheduleTasteRefresh()
       await refreshProfile()
     } catch (err) {
       console.error('Onboarding save failed', err)

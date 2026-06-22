@@ -32,7 +32,7 @@ vi.mock('../components/Bertha', () => ({ default: () => null }))
 let profile: { discover_slate: DiscoverSlate | null } | null
 const refreshProfile = vi.fn()
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1' }, profile, refreshProfile }),
+  useAuth: () => ({ user: { id: 'u1' }, profile, refreshProfile, scheduleTasteRefresh: vi.fn() }),
 }))
 
 import Discover from './Discover'

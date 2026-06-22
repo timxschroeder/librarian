@@ -22,8 +22,9 @@ vi.mock('../lib/googleBooks', () => ({
   enrichBook: (book: unknown) => Promise.resolve(book),
 }))
 
+const scheduleTasteRefresh = vi.fn()
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1' } }),
+  useAuth: () => ({ user: { id: 'u1' }, scheduleTasteRefresh }),
 }))
 
 import AddBookModal from './AddBookModal'
@@ -33,6 +34,7 @@ const result = { key: '/works/1', title: 'Dune', author_name: ['Frank Herbert'] 
 beforeEach(() => {
   upsertBookAndUserBook.mockReset()
   searchBooks.mockReset()
+  scheduleTasteRefresh.mockReset()
 })
 
 describe('AddBookModal', () => {
@@ -60,6 +62,7 @@ describe('AddBookModal', () => {
     await user.click(await screen.findByRole('button', { name: /Dune/ }))
 
     expect(upsertBookAndUserBook).toHaveBeenCalled()
+    expect(scheduleTasteRefresh).toHaveBeenCalled()
     expect(onAdded).toHaveBeenCalled()
     expect(onClose).toHaveBeenCalled()
   })

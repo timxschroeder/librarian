@@ -14,7 +14,7 @@ function goalCelebratedKey(userId: string): string {
 }
 
 export default function Shelf() {
-  const { user, profile } = useAuth()
+  const { user, profile, scheduleTasteRefresh } = useAuth()
   const [userBooks, setUserBooks] = useState<UserBook[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -111,6 +111,7 @@ export default function Shelf() {
     )
     try {
       await updateUserBookRating(userBookId, rating)
+      scheduleTasteRefresh()
     } catch (err) {
       console.error('Failed to update rating', err)
       fetchBooks()
@@ -122,6 +123,7 @@ export default function Shelf() {
     setUserBooks((p) => p.filter((ub) => ub.id !== userBookId))
     try {
       await deleteUserBook(userBookId)
+      scheduleTasteRefresh()
     } catch (err) {
       console.error('Failed to remove book', err)
       setUserBooks(prev)

@@ -6,25 +6,10 @@ vi.mock('./supabase', () => ({
   supabase: { functions: { invoke: (...args: unknown[]) => invoke(...args) } },
 }))
 
-import { initializeTastePortrait, converse, recomputeTasteProfile } from './librarian'
+import { converse, recomputeTaste } from './librarian'
 
 beforeEach(() => {
   invoke.mockReset()
-})
-
-describe('initializeTastePortrait', () => {
-  it('returns the taste summary on success', async () => {
-    invoke.mockResolvedValue({ data: { taste_summary: 'You love voice.' }, error: null })
-    expect(await initializeTastePortrait([{ title: 'T', author: 'A' }])).toBe('You love voice.')
-    expect(invoke).toHaveBeenCalledWith('librarian', {
-      body: { mode: 'initialize', books: [{ title: 'T', author: 'A' }] },
-    })
-  })
-
-  it('throws on an Edge Function error', async () => {
-    invoke.mockResolvedValue({ data: null, error: { message: 'boom' } })
-    await expect(initializeTastePortrait([])).rejects.toMatchObject({ message: 'boom' })
-  })
 })
 
 describe('converse', () => {
@@ -60,24 +45,31 @@ describe('converse', () => {
   })
 })
 
-describe('recomputeTasteProfile', () => {
-  it('returns the taste axes and invokes the profile mode', async () => {
-    const axes = {
-      source_of_reward: { language: 0.4, story: 0.1, character: 0.2, ideas: 0.3 },
-      weight: { value: 0.5, confidence: 0.8 },
-      propulsion: { value: -0.3, confidence: 0.6 },
-      darkness: { value: 0.2, confidence: 0.7 },
-      tone: { value: 0, confidence: 0 },
-      signature: '3:13',
-      updated_at: '2026-06-15T00:00:00.000Z',
-    }
-    invoke.mockResolvedValue({ data: { taste_axes: axes }, error: null })
-    expect(await recomputeTasteProfile()).toEqual(axes)
-    expect(invoke).toHaveBeenCalledWith('librarian', { body: { mode: 'profile' } })
+describe('recomputeTaste', () => {
+  const axes = {
+    source_of_reward: { language: 0.4, story: 0.1, character: 0.2, ideas: 0.3 },
+    weight: { value: 0.5, confidence: 0.8 },
+    propulsion: { value: -0.3, confidence: 0.6 },
+    darkness: { value: 0.2, confidence: 0.7 },
+    tone: { value: 0, confidence: 0 },
+    signature: '3:13:0',
+    updated_at: '2026-06-15T00:00:00.000Z',
+  }
+
+  it('returns the portrait + axes and invokes the recompute mode (unforced by default)', async () => {
+    invoke.mockResolvedValue({ data: { taste_summary: 'You love voice.', taste_axes: axes }, error: null })
+    expect(await recomputeTaste()).toEqual({ taste_summary: 'You love voice.', taste_axes: axes })
+    expect(invoke).toHaveBeenCalledWith('librarian', { body: { mode: 'recompute', force: false } })
+  })
+
+  it('forwards the force flag', async () => {
+    invoke.mockResolvedValue({ data: { taste_summary: null, taste_axes: axes }, error: null })
+    await recomputeTaste({ force: true })
+    expect(invoke).toHaveBeenCalledWith('librarian', { body: { mode: 'recompute', force: true } })
   })
 
   it('throws on an Edge Function error', async () => {
     invoke.mockResolvedValue({ data: null, error: { message: 'boom' } })
-    await expect(recomputeTasteProfile()).rejects.toMatchObject({ message: 'boom' })
+    await expect(recomputeTaste()).rejects.toMatchObject({ message: 'boom' })
   })
 })

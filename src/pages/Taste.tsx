@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserBooks } from '../lib/db'
-import { recomputeTasteProfile } from '../lib/librarian'
-import { shelfSignature } from '../lib/shelf'
+import { recomputeTaste } from '../lib/librarian'
 import Bertha from '../components/Bertha'
 import type { TasteAxes, TasteAxis } from '../types'
 
@@ -110,17 +109,17 @@ export default function Taste() {
         return
       }
 
-      const sig = shelfSignature(books)
+      // Show the cached profile instantly, then ask the server to recompute. The edge
+      // function is the authority on staleness — its signature folds in conversation
+      // as well as the shelf, and it no-ops cheaply (no model call) when nothing has
+      // changed — so we always trigger it and let it decide.
       const cached = profile?.taste_axes ?? null
       if (cached) setAxes(cached)
 
-      // Recompute when we have nothing cached, or the shelf changed since last time.
-      if (!cached || cached.signature !== sig) {
-        setComputing(true)
-        const fresh = await recomputeTasteProfile()
-        setAxes(fresh)
-        await refreshProfile()
-      }
+      setComputing(true)
+      const { taste_axes } = await recomputeTaste()
+      setAxes(taste_axes)
+      await refreshProfile()
     } catch (err) {
       console.error('Taste sync failed', err)
       setError('Could not load your taste profile. Please try again.')

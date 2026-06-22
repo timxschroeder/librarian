@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getChatHistory, saveChatMessage, updateProfile, getUserBooks } from '../lib/db'
-import { converse, initializeTastePortrait } from '../lib/librarian'
+import { getChatHistory, saveChatMessage } from '../lib/db'
+import { converse } from '../lib/librarian'
 import type { SlateBook } from '../types'
 import Bertha from '../components/Bertha'
 
@@ -20,11 +20,10 @@ const TYPE_LABEL: Record<NonNullable<SlateBook['type']>, string> = {
 }
 
 export default function Librarian() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile, scheduleTasteRefresh } = useAuth()
   const [messages, setMessages] = useState<LocalMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [initializing, setInitializing] = useState(false)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -65,34 +64,9 @@ export default function Librarian() {
     }
   }, [user, tasteSummary])
 
-  // Generate initial taste portrait if it doesn't exist yet
-  const maybeInitialize = useCallback(async () => {
-    if (!user || profile?.taste_summary) return
-    // Only initialize if they have books on their shelf (otherwise nothing to infer from)
-    const userBooks = await getUserBooks(user.id)
-    const lovedBooks = userBooks
-      .filter((ub) => ub.rating && ub.rating >= 4)
-      .map((ub) => ({ title: ub.book.title, author: ub.book.author ?? '' }))
-    if (lovedBooks.length === 0) return
-
-    setInitializing(true)
-    try {
-      const tasteSummary = await initializeTastePortrait(lovedBooks)
-      if (tasteSummary) {
-        await updateProfile(user.id, { taste_summary: tasteSummary })
-        await refreshProfile()
-      }
-    } catch {
-      // Non-fatal — librarian still works without taste portrait
-    } finally {
-      setInitializing(false)
-    }
-  }, [user, profile?.taste_summary, refreshProfile])
-
   useEffect(() => {
     loadHistory()
-    maybeInitialize()
-  }, [loadHistory, maybeInitialize])
+  }, [loadHistory])
 
   // The live "table" is the most recent slate anyone put down. Pure-conversation turns
   // don't carry a slate, so it stays sticky across them until a re-roll replaces it.
@@ -138,6 +112,9 @@ export default function Librarian() {
       }
       setMessages((prev) => [...prev, assistantMsg])
       await saveChatMessage(user.id, 'assistant', reply, slate ?? null)
+      // Conversation feeds taste: nudge a recompute. The edge function only re-runs
+      // the model once the chat bucket ticks over, so this is cheap per turn.
+      scheduleTasteRefresh()
     } catch (err) {
       const errMsg: LocalMessage = {
         id: crypto.randomUUID(),
@@ -179,12 +156,6 @@ export default function Librarian() {
       {/* Header */}
       <div className="px-5 md:px-8 pt-8 pb-4 border-b border-border flex-shrink-0">
         <h1 className="font-display text-3xl text-ink">Chat</h1>
-        {initializing && (
-          <p className="text-xs text-muted mt-1 flex items-center gap-1.5">
-            <Bertha expression="thinking" size={22} />
-            Getting to know your taste…
-          </p>
-        )}
       </div>
 
       {/* Messages */}

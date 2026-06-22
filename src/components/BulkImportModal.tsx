@@ -20,7 +20,7 @@ interface Props {
 }
 
 export default function BulkImportModal({ onClose, onImported }: Props) {
-  const { user } = useAuth()
+  const { user, scheduleTasteRefresh } = useAuth()
   const [text, setText] = useState('')
   const [working, setWorking] = useState(false)
   const [status, setStatus] = useState('')
@@ -53,6 +53,7 @@ export default function BulkImportModal({ onClose, onImported }: Props) {
 
       setStatus('Adding to your shelf…')
       const { added, skipped } = await bulkAddBooks(user.id, found.map((m) => m.book!))
+      if (added.length > 0) scheduleTasteRefresh()
 
       onImported({ added, skipped, unmatched, flaggedBookIds })
       onClose()

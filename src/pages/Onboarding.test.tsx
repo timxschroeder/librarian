@@ -9,7 +9,7 @@ vi.mock('../lib/db', () => ({
 
 const refreshProfile = vi.fn()
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1' }, refreshProfile }),
+  useAuth: () => ({ user: { id: 'u1' }, refreshProfile, scheduleTasteRefresh: vi.fn() }),
 }))
 
 import Onboarding from './Onboarding'
