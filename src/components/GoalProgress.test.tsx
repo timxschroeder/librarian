@@ -15,4 +15,17 @@ describe('GoalProgress', () => {
     expect(screen.getByText('Goal reached — 30 of 24 books read 🎉')).toBeInTheDocument()
     expect(screen.getByText('100%')).toBeInTheDocument()
   })
+
+  it('deepens the bar green as progress climbs', () => {
+    const bar = () => screen.getByRole('progressbar').firstChild as HTMLElement
+
+    const { rerender } = render(<GoalProgress count={4} goal={16} />) // 25% — sage
+    expect(bar()).toHaveClass('bg-forest-400')
+
+    rerender(<GoalProgress count={11} goal={16} />) // 69% — brand forest
+    expect(bar()).toHaveClass('bg-forest-700')
+
+    rerender(<GoalProgress count={16} goal={16} />) // reached — deep forest
+    expect(bar()).toHaveClass('bg-forest-900')
+  })
 })
