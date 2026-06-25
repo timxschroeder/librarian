@@ -31,6 +31,32 @@ export async function updateProfile(userId: string, patch: Partial<Profile>): Pr
   if (!data?.length) throw new Error('Profile not found — try signing out and back in.')
 }
 
+/**
+ * The one deliberate exception to the throw-on-error contract above: a best-effort
+ * write to the `app_errors` log. A logging failure must never surface to the user or
+ * mask the original error, so this swallows everything. Call it via
+ * `src/lib/errorLog.ts` rather than directly.
+ */
+export async function logAppError(entry: {
+  source: 'client' | 'edge'
+  userId?: string | null
+  context?: Record<string, unknown>
+  message: string
+  stack?: string | null
+}): Promise<void> {
+  try {
+    await supabase.from('app_errors').insert({
+      source: entry.source,
+      user_id: entry.userId ?? null,
+      context: entry.context ?? {},
+      message: entry.message.slice(0, 4000),
+      stack: entry.stack ? entry.stack.slice(0, 8000) : null,
+    })
+  } catch {
+    // Swallow: logging must never throw.
+  }
+}
+
 export async function getUserBooks(userId: string): Promise<UserBook[]> {
   const { data, error } = await supabase
     .from('user_books')

@@ -3,6 +3,7 @@ import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { getProfile } from '../lib/db'
 import { recomputeTaste } from '../lib/librarian'
+import { reportError, installGlobalErrorReporting, setErrorUserProvider } from '../lib/errorLog'
 import type { Profile } from '../types'
 
 interface AuthContextValue {
@@ -28,6 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  // Latest user id for the error reporter (reads a ref so the getter never goes stale).
+  const userIdRef = useRef<string | null>(null)
 
   async function fetchProfile(userId: string) {
     try {
@@ -36,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Don't crash the auth gate on a profile read failure — log and treat as
       // no profile so the user lands on onboarding/login rather than a blank app.
       console.error('Failed to load profile', err)
+      reportError('AuthContext.fetchProfile', err)
       setProfile(null)
     }
   }
@@ -62,14 +66,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Non-fatal: the app works without an up-to-date taste profile, and the
           // Taste tab will retry on its next visit.
           console.error('Taste refresh failed', err)
+          reportError('AuthContext.scheduleTasteRefresh', err)
         })
     }, 4000)
   }
 
   useEffect(() => {
+    // Route unhandled errors into app_errors, attributed to the current user.
+    setErrorUserProvider(() => userIdRef.current)
+    installGlobalErrorReporting()
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
+      userIdRef.current = session?.user?.id ?? null
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false))
       } else {
@@ -80,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
+      userIdRef.current = session?.user?.id ?? null
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false))
       } else {

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getChatHistory, saveChatMessage } from '../lib/db'
 import { converse } from '../lib/librarian'
+import { reportError } from '../lib/errorLog'
 import type { SlateBook } from '../types'
 import Bertha from '../components/Bertha'
 
@@ -123,6 +124,7 @@ export default function Librarian() {
       }
       setMessages((prev) => [...prev, errMsg])
       console.error(err)
+      reportError('Librarian.send', err)
     } finally {
       setLoading(false)
       inputRef.current?.focus()

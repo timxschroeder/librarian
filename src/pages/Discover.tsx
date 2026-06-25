@@ -11,6 +11,7 @@ import {
   byAuthorIdentity,
 } from '../lib/openLibrary'
 import { useAuth } from '../contexts/AuthContext'
+import { reportError } from '../lib/errorLog'
 import Bertha from '../components/Bertha'
 import type { Book, DiscoverBook, DiscoverSlate } from '../types'
 
@@ -170,6 +171,7 @@ export default function Discover() {
       }
     } catch (err) {
       console.error('Discover load failed', err)
+      reportError('Discover.load', err)
       setError('Could not load suggestions. Please try again.')
       setLoading(false)
     }

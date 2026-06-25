@@ -21,28 +21,37 @@ const cors = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
+  const admin = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  )
+  // Hoisted so the catch can attribute the error to a user + mode in app_errors.
+  let userId: string | null = null
+  let mode = ''
+
   try {
     const authHeader = req.headers.get('authorization') ?? ''
     const jwt = authHeader.replace('Bearer ', '')
-
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
 
     const { data: { user }, error: authErr } = await admin.auth.getUser(jwt)
     if (authErr || !user) {
       return json({ error: 'Unauthorized' }, 401)
     }
+    userId = user.id
 
     const body = await req.json()
-    const { mode, message = '', history = [] } = body
+    mode = body.mode ?? ''
+    const { message = '', history = [] } = body
 
-    // Load user context (shelf + taste portrait) from DB
+    // Load user context (shelf + taste portrait) from DB. check() turns a failed read
+    // into a loud 500 (logged to app_errors) instead of a silent fallback to empty data
+    // — the exact failure class that hid the missing service_role grant for weeks.
     const [profileRes, shelfRes] = await Promise.all([
       admin.from('profiles').select('name, taste_summary, taste_axes').eq('id', user.id).single(),
       admin.from('user_books').select('rating, book_id, book:books(title, author)').eq('user_id', user.id),
     ])
+    check(profileRes, 'load profile')
+    check(shelfRes, 'load shelf')
 
     const name = profileRes.data?.name || 'the reader'
     const tasteSummary: string | null = profileRes.data?.taste_summary ?? null
@@ -72,10 +81,10 @@ serve(async (req) => {
       const totalCount = shelf.length
       const ratingSum = shelf.reduce((s, b) => s + (b.rating ?? 0), 0)
 
-      const { count: chatCount } = await admin
+      const { count: chatCount } = check(await admin
         .from('chat_messages')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
+        .eq('user_id', user.id), 'count chat messages')
       const chatBucket = Math.floor((chatCount ?? 0) / CHAT_BUCKET_SIZE)
       const signature = `${totalCount}:${ratingSum}:${chatBucket}`
 
@@ -90,18 +99,17 @@ serve(async (req) => {
       // existing portrait untouched.
       if (totalCount === 0) {
         const empty = emptyAxes(signature)
-        const { error } = await admin.from('profiles').update({ taste_axes: empty }).eq('id', user.id)
-        if (error) throw error
+        check(await admin.from('profiles').update({ taste_axes: empty }).eq('id', user.id), 'persist empty taste')
         return json({ taste_summary: tasteSummary, taste_axes: empty })
       }
 
       // Recent transcript so conversation moves both the portrait and the axes.
-      const { data: chatRows } = await admin
+      const { data: chatRows } = check(await admin
         .from('chat_messages')
         .select('role, content')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(20), 'load chat transcript')
       const transcript = (chatRows ?? [])
         .reverse()
         .map((m: { role: string; content: string }) => `${m.role === 'user' ? name : 'Librarian'}: ${m.content}`)
@@ -118,11 +126,10 @@ serve(async (req) => {
         ? parsed.portrait.trim()
         : tasteSummary
 
-      const { error } = await admin
+      check(await admin
         .from('profiles')
         .update({ taste_axes: axes, taste_summary: portrait })
-        .eq('id', user.id)
-      if (error) throw error
+        .eq('id', user.id), 'persist taste')
       return json({ taste_summary: portrait, taste_axes: axes })
     }
 
@@ -155,7 +162,7 @@ serve(async (req) => {
       // Empty shelf — persist an explicit empty slate so the UI shows its empty state.
       if (totalCount === 0) {
         const empty = { signature, updated_at: new Date().toISOString(), best_picks: [], stretch: [], seeds: [] }
-        await admin.from('profiles').update({ discover_slate: empty }).eq('id', user.id)
+        check(await admin.from('profiles').update({ discover_slate: empty }).eq('id', user.id), 'persist empty discover')
         return json({ discover_slate: empty })
       }
 
@@ -216,7 +223,7 @@ serve(async (req) => {
       }
 
       const slate = { signature, updated_at: new Date().toISOString(), best_picks, stretch, seeds }
-      await admin.from('profiles').update({ discover_slate: slate }).eq('id', user.id)
+      check(await admin.from('profiles').update({ discover_slate: slate }).eq('id', user.id), 'persist discover')
       return json({ discover_slate: slate })
     }
 
@@ -243,10 +250,38 @@ serve(async (req) => {
       recommendations: normalizeRecs(parsed.recommendations, table),
     })
   } catch (err) {
-    console.error(err)
-    return json({ error: String(err) }, 500)
+    // One id ties the user-facing failure to a queryable row. We look for errors in
+    // Postgres (the one store that's reliably queryable here), so record them there —
+    // best-effort, never letting the logger mask the original error.
+    const errorId = crypto.randomUUID()
+    console.error(`[librarian:${mode || 'unknown'}] ${errorId}`, err)
+    try {
+      await admin.from('app_errors').insert({
+        source: 'edge',
+        user_id: userId,
+        context: { mode, fn: 'librarian' },
+        message: String((err as Error)?.message ?? err).slice(0, 4000),
+        stack: ((err as Error)?.stack ?? null)?.slice(0, 8000) ?? null,
+      })
+    } catch (logErr) {
+      console.error('app_errors insert failed', logErr)
+    }
+    return json({ error: String(err), error_id: errorId }, 500)
   }
 })
+
+// Throw on a Supabase {data,error} result so a failed query/write becomes a loud 500
+// (logged to app_errors) instead of a silent fallback to empty data — the exact failure
+// class that hid the missing service_role grant. Mirrors the client db.ts contract so
+// both sides of the wire fail loudly. Returns the result so the caller can destructure
+// data/count as usual.
+function check<T extends { error: unknown }>(res: T, ctx: string): T {
+  if (res.error) {
+    const e = res.error as { message?: string; code?: string }
+    throw new Error(`${ctx}: ${e.message ?? JSON.stringify(res.error)}${e.code ? ` (${e.code})` : ''}`)
+  }
+  return res
+}
 
 // Read the books the reader has dismissed (rejected recommendations), so neither the
 // Discover slate nor the chat slate resurfaces them. Returns OL ids (to filter resolved
@@ -255,11 +290,11 @@ async function loadRejected(
   admin: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<{ ids: Set<string>; titles: string[] }> {
-  const { data } = await admin
+  const { data } = check(await admin
     .from('recommendations')
     .select('book_id, book:books(title, author)')
     .eq('user_id', userId)
-    .eq('status', 'rejected')
+    .eq('status', 'rejected'), 'load rejected recommendations')
   const ids = new Set<string>()
   const titles: string[] = []
   for (const r of (data ?? []) as { book_id: string; book: { title: string; author: string | null } | null }[]) {

@@ -22,6 +22,7 @@ import {
   saveChatMessage,
   getKindleRequests,
   createKindleRequest,
+  logAppError,
   type OnboardingBook,
 } from './db'
 import type { Book } from '../types'
@@ -281,5 +282,19 @@ describe('completeOnboarding', () => {
       },
     })
     await expect(completeOnboarding('u1', ['literary'], books)).resolves.toBeUndefined()
+  })
+})
+
+describe('logAppError', () => {
+  it('writes to app_errors on success', async () => {
+    setClient({ tables: { app_errors: { data: null, error: null } } })
+    await logAppError({ source: 'edge', userId: 'u1', context: { mode: 'recompute' }, message: 'boom' })
+    const client = hoisted.client as ReturnType<typeof createSupabaseMock>
+    expect(client.from).toHaveBeenCalledWith('app_errors')
+  })
+
+  it('never throws when the insert fails (best-effort — logging must not mask the real error)', async () => {
+    setClient({ tables: { app_errors: { error: { message: 'denied' } } } })
+    await expect(logAppError({ source: 'client', message: 'x' })).resolves.toBeUndefined()
   })
 })

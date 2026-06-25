@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserBooks } from '../lib/db'
 import { recomputeTaste } from '../lib/librarian'
+import { reportError } from '../lib/errorLog'
 import Bertha from '../components/Bertha'
 import type { TasteAxes, TasteAxis } from '../types'
 
@@ -118,6 +119,7 @@ export default function Taste() {
       await refreshProfile()
     } catch (err) {
       console.error('Taste sync failed', err)
+      reportError('Taste.sync', err)
       setError('Could not load your taste profile. Please try again.')
     } finally {
       setComputing(false)
