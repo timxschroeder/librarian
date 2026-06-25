@@ -8,22 +8,18 @@ import type { TasteAxes, TasteAxis } from '../types'
 // Below this confidence an axis is shown as an unknown "gap" rather than a position.
 const CONFIDENCE_GAP = 0.25
 
+// Four categories → four distinct hues so adjacent segments are always legible.
+// (Story was previously `border`, which matched the empty track and vanished.)
 const SOURCE_SEGMENTS = [
-  { key: 'language', label: 'Language' },
-  { key: 'ideas', label: 'Ideas' },
-  { key: 'character', label: 'Character' },
-  { key: 'story', label: 'Story' },
+  { key: 'ideas', label: 'Ideas', cls: 'bg-burgundy-700' },
+  { key: 'language', label: 'Language', cls: 'bg-forest-700' },
+  { key: 'character', label: 'Character', cls: 'bg-muted' },
+  { key: 'story', label: 'Story', cls: 'bg-rose-300' },
 ] as const
-
-// A single-hue forest scale, applied darkest→lightest by share. The bar is a
-// part-to-whole composition, so a sequential ramp reads cleaner than four
-// unrelated colours — and the biggest source is always the most prominent.
-const RANK_FILL = ['bg-forest-900', 'bg-forest-700', 'bg-forest-400', 'bg-forest-100']
 
 function CompositionBar({ source }: { source: TasteAxes['source_of_reward'] }) {
   const ranked = SOURCE_SEGMENTS.map((seg) => ({ ...seg, pct: Math.round(source[seg.key] * 100) }))
     .sort((a, b) => b.pct - a.pct)
-    .map((seg, i) => ({ ...seg, cls: RANK_FILL[i] }))
 
   return (
     <div>
