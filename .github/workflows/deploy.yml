@@ -103,7 +103,11 @@ jobs:
           SQL+=" union all select has_table_privilege('authenticated','public.books','UPDATE')"
           SQL+=" union all select has_table_privilege('authenticated','public.user_books','INSERT')"
           SQL+=" union all select has_table_privilege('authenticated','public.user_books','SELECT')"
-          SQL+=" union all select has_table_privilege('authenticated','public.profiles','UPDATE')) t;"
+          SQL+=" union all select has_table_privilege('authenticated','public.profiles','UPDATE')"
+          SQL+=" union all select has_table_privilege('service_role','public.profiles','SELECT')"
+          SQL+=" union all select has_table_privilege('service_role','public.profiles','UPDATE')"
+          SQL+=" union all select has_table_privilege('service_role','public.user_books','SELECT')"
+          SQL+=" union all select has_table_privilege('service_role','public.chat_messages','SELECT')) t;"
           response=$(jq -n --arg q "$SQL" '{query: $q}' | \
             curl -sf \
               -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
@@ -112,8 +116,9 @@ jobs:
               -d @-)
           echo "$response"
           if [ "$(echo "$response" | jq -r '.[0].all_ok')" != "true" ]; then
-            echo "ERROR: 'authenticated' role is missing required table privileges."
-            echo "Check supabase/migrations/003_grants.sql applied successfully."
+            echo "ERROR: 'authenticated' or 'service_role' is missing required table privileges."
+            echo "Check supabase/migrations/003_grants.sql (authenticated/anon) and"
+            echo "009_service_role_grants.sql (service_role / Edge Functions) applied successfully."
             exit 1
           fi
           echo "✓ table grants verified"
