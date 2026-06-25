@@ -9,25 +9,35 @@ import type { TasteAxes, TasteAxis } from '../types'
 const CONFIDENCE_GAP = 0.25
 
 const SOURCE_SEGMENTS = [
-  { key: 'language', label: 'Language', cls: 'bg-forest-700' },
-  { key: 'ideas', label: 'Ideas', cls: 'bg-burgundy-700' },
-  { key: 'character', label: 'Character', cls: 'bg-muted' },
-  { key: 'story', label: 'Story', cls: 'bg-border' },
+  { key: 'language', label: 'Language' },
+  { key: 'ideas', label: 'Ideas' },
+  { key: 'character', label: 'Character' },
+  { key: 'story', label: 'Story' },
 ] as const
 
+// A single-hue forest scale, applied darkest→lightest by share. The bar is a
+// part-to-whole composition, so a sequential ramp reads cleaner than four
+// unrelated colours — and the biggest source is always the most prominent.
+const RANK_FILL = ['bg-forest-900', 'bg-forest-700', 'bg-forest-400', 'bg-forest-100']
+
 function CompositionBar({ source }: { source: TasteAxes['source_of_reward'] }) {
+  const ranked = SOURCE_SEGMENTS.map((seg) => ({ ...seg, pct: Math.round(source[seg.key] * 100) }))
+    .sort((a, b) => b.pct - a.pct)
+    .map((seg, i) => ({ ...seg, cls: RANK_FILL[i] }))
+
   return (
     <div>
-      <div className="flex h-7 rounded-md overflow-hidden border border-border">
-        {SOURCE_SEGMENTS.map(({ key, cls }) => (
-          <div key={key} className={cls} style={{ width: `${Math.round(source[key] * 100)}%` }} />
+      {/* gap-px over a border-coloured track draws hairline dividers between segments */}
+      <div className="flex h-7 rounded-md overflow-hidden border border-border bg-border gap-px">
+        {ranked.map(({ key, cls, pct }) => (
+          <div key={key} className={cls} style={{ width: `${pct}%` }} />
         ))}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
-        {SOURCE_SEGMENTS.map(({ key, label, cls }) => (
+        {ranked.map(({ key, label, cls, pct }) => (
           <span key={key} className="flex items-center gap-1.5 text-sm text-ink">
             <span className={`w-2.5 h-2.5 rounded-sm ${cls} inline-block`} />
-            {label} <span className="text-muted">{Math.round(source[key] * 100)}%</span>
+            {label} <span className="text-muted">{pct}%</span>
           </span>
         ))}
       </div>
@@ -35,23 +45,13 @@ function CompositionBar({ source }: { source: TasteAxes['source_of_reward'] }) {
   )
 }
 
-function AxisRow({
-  left,
-  right,
-  axis,
-  accent,
-}: {
-  left: string
-  right: string
-  axis: TasteAxis
-  accent: 'forest' | 'burgundy'
-}) {
+function AxisRow({ left, right, axis }: { left: string; right: string; axis: TasteAxis }) {
   const isGap = axis.confidence < CONFIDENCE_GAP
   const pct = ((axis.value + 1) / 2) * 100
   // The band widens as confidence drops — visible uncertainty around the marker.
   const bandPx = Math.round((1 - axis.confidence) * 70) + 16
-  const dotCls = accent === 'forest' ? 'bg-forest-700' : 'bg-burgundy-700'
-  const bandCls = accent === 'forest' ? 'bg-forest-700/15' : 'bg-burgundy-700/15'
+  const dotCls = 'bg-forest-700'
+  const bandCls = 'bg-forest-700/15'
 
   const leftEmph = !isGap && axis.value < 0
   const rightEmph = !isGap && axis.value > 0
@@ -195,6 +195,10 @@ export default function Taste() {
 
   // ── Main ──────────────────────────────────────────────────────────────────
 
+  const hasGap = [axes.weight, axes.propulsion, axes.darkness, axes.tone].some(
+    (a) => a.confidence < CONFIDENCE_GAP,
+  )
+
   return (
     <div className="px-5 md:px-8 pt-8 md:pt-10 pb-10 max-w-2xl">
       <h1 className="font-display text-3xl text-ink mb-1">Your taste</h1>
@@ -233,14 +237,16 @@ export default function Taste() {
           How you like it to read
         </h2>
         <div className="flex flex-col gap-5">
-          <AxisRow left="effortless" right="demanding" axis={axes.weight} accent="forest" />
-          <AxisRow left="slow burn" right="page-turner" axis={axes.propulsion} accent="forest" />
-          <AxisRow left="warm" right="bleak" axis={axes.darkness} accent="burgundy" />
-          <AxisRow left="earnest" right="playful" axis={axes.tone} accent="burgundy" />
+          <AxisRow left="effortless" right="demanding" axis={axes.weight} />
+          <AxisRow left="slow burn" right="page-turner" axis={axes.propulsion} />
+          <AxisRow left="warm" right="bleak" axis={axes.darkness} />
+          <AxisRow left="earnest" right="playful" axis={axes.tone} />
         </div>
-        <p className="text-xs text-muted mt-5 pt-4 border-t border-border">
-          Faded axes marked “?” are ones your librarian hasn't figured out yet — talk to it about those books and they'll fill in.
-        </p>
+        {hasGap && (
+          <p className="text-xs text-muted mt-5 pt-4 border-t border-border">
+            Faded axes marked “?” are ones your librarian hasn't figured out yet — talk to it about those books and they'll fill in.
+          </p>
+        )}
       </section>
     </div>
   )
