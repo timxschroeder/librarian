@@ -145,7 +145,22 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
         run: |
           PROJECT_REF=$(echo "$VITE_SUPABASE_URL" | grep -oP 'https://\K[^.]+')
-          npx supabase@latest functions deploy librarian --project-ref "$PROJECT_REF"
+          # The CLI bundles the function inside a Docker container pulled from
+          # public.ecr.aws, which intermittently rate-limits ("toomanyrequests:
+          # Rate exceeded", exit 125). Retry with backoff so a transient pull
+          # failure doesn't fail the whole deploy.
+          for attempt in 1 2 3 4 5; do
+            if npx supabase@latest functions deploy librarian --project-ref "$PROJECT_REF"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 5 ]; then
+              delay=$((attempt * 30))
+              echo "⚠ Edge Function deploy failed (attempt $attempt/5) — retrying in ${delay}s…"
+              sleep "$delay"
+            fi
+          done
+          echo "ERROR: Edge Function deploy failed after 5 attempts."
+          exit 1
 
       - run: npm run build
         env:
