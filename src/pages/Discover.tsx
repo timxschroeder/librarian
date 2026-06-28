@@ -12,6 +12,7 @@ import {
 } from '../lib/openLibrary'
 import { useAuth } from '../contexts/AuthContext'
 import { reportError } from '../lib/errorLog'
+import { logEvent } from '../lib/events'
 import Bertha from '../components/Bertha'
 import type { Book, DiscoverBook, DiscoverSlate } from '../types'
 
@@ -161,9 +162,11 @@ export default function Discover() {
         const fresh = await computeDiscover()
         setSlate(fresh)
         await refreshProfile()
+        logEvent('discover_refresh', { status: 'ok' })
       } catch (e) {
         console.error('Discover compute failed', e)
         setComputeFailed(true)
+        logEvent('discover_refresh', { status: 'error' })
         await authorDone
       } finally {
         setRefreshing(false)
@@ -188,6 +191,7 @@ export default function Discover() {
     setActing(b.id)
     try {
       await upsertBookAndUserBook(user.id, toBookRecord(b), 0)
+      logEvent('book_added', { source: 'discover', book_id: b.id })
       scheduleTasteRefresh()
       setAdded((prev) => new Set(prev).add(b.id))
       setShelfIds((prev) => new Set(prev).add(b.id))

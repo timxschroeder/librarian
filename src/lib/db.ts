@@ -57,6 +57,28 @@ export async function logAppError(entry: {
   }
 }
 
+/**
+ * Best-effort write to the `app_events` behavioural log — the analytics twin of
+ * logAppError. Same deliberate exception to the throw-on-error contract: an analytics
+ * write must never surface to the user or block the UI, so this swallows everything.
+ * Call it via `src/lib/events.ts` rather than directly.
+ */
+export async function logAppEvent(entry: {
+  userId?: string | null
+  name: string
+  props?: Record<string, unknown>
+}): Promise<void> {
+  try {
+    await supabase.from('app_events').insert({
+      user_id: entry.userId ?? null,
+      name: entry.name.slice(0, 200),
+      props: entry.props ?? {},
+    })
+  } catch {
+    // Swallow: analytics must never throw.
+  }
+}
+
 export async function getUserBooks(userId: string): Promise<UserBook[]> {
   const { data, error } = await supabase
     .from('user_books')

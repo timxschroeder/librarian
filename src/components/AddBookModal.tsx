@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { upsertBookAndUserBook } from '../lib/db'
+import { logEvent } from '../lib/events'
 import { searchBooks, toBook } from '../lib/openLibrary'
 import { enrichBook } from '../lib/googleBooks'
 import { useAuth } from '../contexts/AuthContext'
@@ -41,6 +42,7 @@ export default function AddBookModal({ onClose, onAdded }: Props) {
     try {
       const enriched = await enrichBook(toBook(result))
       await upsertBookAndUserBook(user.id, enriched, rating)
+      logEvent('book_added', { source: 'search', book_id: enriched.id, rating })
       scheduleTasteRefresh()
       onAdded()
       onClose()

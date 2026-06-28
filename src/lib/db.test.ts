@@ -23,6 +23,7 @@ import {
   getKindleRequests,
   createKindleRequest,
   logAppError,
+  logAppEvent,
   type OnboardingBook,
 } from './db'
 import type { Book } from '../types'
@@ -296,5 +297,40 @@ describe('logAppError', () => {
   it('never throws when the insert fails (best-effort — logging must not mask the real error)', async () => {
     setClient({ tables: { app_errors: { error: { message: 'denied' } } } })
     await expect(logAppError({ source: 'client', message: 'x' })).resolves.toBeUndefined()
+  })
+})
+
+describe('logAppEvent', () => {
+  // Stable chain whose insert records the payload, so we can assert the exact row
+  // shape written to app_events (the analytics contract) rather than just that it ran.
+  function captureClient() {
+    const inserted: unknown[] = []
+    const chain: Record<string, unknown> = {}
+    chain.insert = vi.fn((payload: unknown) => { inserted.push(payload); return chain })
+    chain.then = (f: (r: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(f)
+    hoisted.client = { from: vi.fn(() => chain) }
+    return { inserted, from: (hoisted.client as { from: ReturnType<typeof vi.fn> }).from }
+  }
+
+  it('writes name, user, and props to app_events', async () => {
+    const { inserted, from } = captureClient()
+    await logAppEvent({ userId: 'u1', name: 'onboarding_genre_toggled', props: { key: 'scifi', selected: true } })
+    expect(from).toHaveBeenCalledWith('app_events')
+    expect(inserted[0]).toEqual({
+      user_id: 'u1',
+      name: 'onboarding_genre_toggled',
+      props: { key: 'scifi', selected: true },
+    })
+  })
+
+  it('defaults props to {} and user to null when omitted', async () => {
+    const { inserted } = captureClient()
+    await logAppEvent({ name: 'onboarding_started' })
+    expect(inserted[0]).toEqual({ user_id: null, name: 'onboarding_started', props: {} })
+  })
+
+  it('never throws when the insert fails (best-effort — analytics must not break the app)', async () => {
+    setClient({ tables: { app_events: { error: { message: 'denied' } } } })
+    await expect(logAppEvent({ name: 'x' })).resolves.toBeUndefined()
   })
 })

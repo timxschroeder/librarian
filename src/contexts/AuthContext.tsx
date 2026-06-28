@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { getProfile } from '../lib/db'
 import { recomputeTaste } from '../lib/librarian'
 import { reportError, installGlobalErrorReporting, setErrorUserProvider } from '../lib/errorLog'
+import { setEventUserProvider, logEvent } from '../lib/events'
 import type { Profile } from '../types'
 
 interface AuthContextValue {
@@ -61,12 +62,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Merge the freshly computed fields into the in-context profile so the
           // Taste tab and chat see them without an extra round-trip.
           setProfile((prev) => (prev ? { ...prev, taste_summary, taste_axes } : prev))
+          logEvent('taste_refresh', { status: 'ok' })
         })
         .catch((err) => {
           // Non-fatal: the app works without an up-to-date taste profile, and the
           // Taste tab will retry on its next visit.
           console.error('Taste refresh failed', err)
           reportError('AuthContext.scheduleTasteRefresh', err)
+          logEvent('taste_refresh', { status: 'error' })
         })
     }, 4000)
   }
@@ -75,6 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Route unhandled errors into app_errors, attributed to the current user.
     setErrorUserProvider(() => userIdRef.current)
     installGlobalErrorReporting()
+    // Attribute behavioural events to the current user too (reads the same live ref).
+    setEventUserProvider(() => userIdRef.current)
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)

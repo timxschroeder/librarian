@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { parseReadingList } from '../lib/librarian'
 import { matchEntry } from '../lib/openLibrary'
 import { bulkAddBooks } from '../lib/db'
+import { logEvent } from '../lib/events'
 import { useAuth } from '../contexts/AuthContext'
 import Bertha from './Bertha'
 import type { UserBook } from '../types'
@@ -54,6 +55,17 @@ export default function BulkImportModal({ onClose, onImported }: Props) {
       setStatus('Adding to your shelf…')
       const { added, skipped } = await bulkAddBooks(user.id, found.map((m) => m.book!))
       if (added.length > 0) scheduleTasteRefresh()
+
+      // One aggregate event per import: how big the paste was, how much matched, and
+      // how much was an amber-flagged guess (the deliberate over-add path).
+      logEvent('bulk_import', {
+        lines: entries.length,
+        matched: found.length,
+        added: added.length,
+        skipped,
+        flagged: flaggedBookIds.length,
+        unmatched: unmatched.length,
+      })
 
       onImported({ added, skipped, unmatched, flaggedBookIds })
       onClose()

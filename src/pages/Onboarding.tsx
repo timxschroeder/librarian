@@ -3,6 +3,7 @@ import { completeOnboarding, type OnboardingBook } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { GENRES, CURATED_BOOKS, type CuratedBook } from '../data/onboardingBooks'
 import { coverUrl } from '../lib/openLibrary'
+import { logEvent } from '../lib/events'
 import Bertha from '../components/Bertha'
 
 // Books shown before the first "Show more" tap, and revealed per tap after.
@@ -46,6 +47,15 @@ export default function Onboarding() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Fire `onboarding_started` once on mount. Abandonment is intentionally NOT a separate
+  // event: React effect cleanup doesn't run on tab-close/navigation (the common way to
+  // bail, and exactly the case we care about), and sendBeacon can't carry Supabase's
+  // auth headers. Instead, abandonment is derived in queries as started-without-
+  // completed — see scripts/analytics.sh funnel and migration 012.
+  useEffect(() => {
+    logEvent('onboarding_started')
+  }, [])
+
   const filteredGenres = useMemo(
     () => GENRES.filter(g => selectedGenres.has(g.key)),
     [selectedGenres]
@@ -71,6 +81,11 @@ export default function Onboarding() {
   const remaining = matchingBooks.length - visibleBooks.length
 
   function toggleGenre(key: string) {
+    // Record every genre tap so a "X got selected without me choosing it" report is
+    // answerable from the log: who tapped what, when, and to which state. Logged here
+    // (not inside the updater) so StrictMode's double-invoke can't duplicate the event.
+    const selected = !selectedGenres.has(key)
+    logEvent('onboarding_genre_toggled', { key, selected })
     setSelectedGenres(prev => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
@@ -118,6 +133,11 @@ export default function Onboarding() {
       })
 
       await completeOnboarding(user.id, [...selectedGenres], books)
+      // Record the final selection — the close of the onboarding funnel.
+      logEvent('onboarding_completed', {
+        genres: [...selectedGenres],
+        book_count: books.length,
+      })
       // Seed the taste profile (portrait + axes) from the books just added.
       scheduleTasteRefresh()
       await refreshProfile()
