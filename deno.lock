@@ -1,0 +1,39 @@
+{
+  "version": "5",
+  "remote": {
+    "https://deno.land/std@0.168.0/fmt/colors.ts": "03ad95e543d2808bc43c17a3dd29d25b43d0f16287fe562a0be89bf632454a12",
+    "https://deno.land/std@0.168.0/testing/_diff.ts": "a23e7fc2b4d8daa3e158fa06856bedf5334ce2a2831e8bf9e509717f455adb2c",
+    "https://deno.land/std@0.168.0/testing/_format.ts": "cd11136e1797791045e639e9f0f4640d5b4166148796cad37e6ef75f7d7f3832",
+    "https://deno.land/std@0.168.0/testing/asserts.ts": "51353e79437361d4b02d8e32f3fc83b22231bc8f8d4c841d86fd32b0b0afe940"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@eslint/js@^10.0.1",
+        "npm:@playwright/test@^1.60.0",
+        "npm:@supabase/supabase-js@^2.50.0",
+        "npm:@testing-library/jest-dom@^6.9.1",
+        "npm:@testing-library/react@^16.3.2",
+        "npm:@testing-library/user-event@^14.6.1",
+        "npm:@types/react-dom@^18.3.0",
+        "npm:@types/react@^18.3.1",
+        "npm:@vitejs/plugin-react@^4.3.1",
+        "npm:autoprefixer@^10.4.18",
+        "npm:eslint-plugin-react-hooks@^7.1.1",
+        "npm:eslint-plugin-react-refresh@~0.5.3",
+        "npm:eslint@^10.5.0",
+        "npm:globals@^17.6.0",
+        "npm:happy-dom@^20.10.3",
+        "npm:postcss@^8.4.35",
+        "npm:react-dom@^18.3.1",
+        "npm:react-router-dom@^6.22.0",
+        "npm:react@^18.3.1",
+        "npm:tailwindcss@^3.4.1",
+        "npm:typescript-eslint@^8.61.0",
+        "npm:typescript@^5.4.2",
+        "npm:vite@^5.2.0",
+        "npm:vitest@^4.1.8"
+      ]
+    }
+  }
+}
